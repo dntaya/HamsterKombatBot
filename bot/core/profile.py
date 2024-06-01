@@ -5,6 +5,7 @@ from time import time
 class Profile:
     balance: float
     earn_per_hour: float
+    earn_per_sec: float
     available_energy: int
     energy_recover_per_sec: int
     earn_per_tap: float
@@ -14,6 +15,7 @@ class Profile:
     def __init__(self, data: dict):
         self.balance = data.get('balanceCoins', 0)
         self.earn_per_hour = data.get('earnPassivePerHour', 0)
+        self.earn_per_sec = data.get('earnPassivePerSec', 0)
         self.available_energy = data.get('availableTaps', 0)
         self.energy_recover_per_sec = data.get('tapsRecoverPerSec', 0)
         self.earn_per_tap = data.get('earnPerTap', 0)

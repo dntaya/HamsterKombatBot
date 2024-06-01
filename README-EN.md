@@ -21,11 +21,8 @@
 | **API_ID / API_HASH**                 | Platform data from which to launch a Telegram session _(stock - Android)_                |
 | **AUTO_UPGRADE**                      | Whether to upgrade the passive earn _(True / False)_                                     |
 | **AUTO_CLICKER**                      | Enable automatic clicker _(True / False)_                                                |
-| **MIN_AVAILABLE_TAPS**                | Minimal count of available clicks for starting auto-clicker _(eg 15)_                    |
 | **WAIT_FOR_MOST_PROFIT_UPGRADES**     | Save money for the most profitable upgrade                                               |
 | **APPLY_DAILY_ENERGY**                | Whether to use the daily free energy boost _(True / False)_                              |
-| **RANDOM_CLICKS_COUNT**               | Random number of taps _(eg [50,200])_                                                    |
-| **SLEEP_BETWEEN_TAP**                 | Random delay between taps in seconds _(eg [10,25])_                                      |
 | **USE_PROXY_FROM_FILE**               | Whether to use proxy from the `bot/config/proxies.txt` file (True / False)               |
 
 ## Quick Start 📚
