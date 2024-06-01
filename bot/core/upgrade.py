@@ -25,7 +25,7 @@ class Upgrade:
         self.cooldown_seconds = data.get("cooldownSeconds", 0)
         self.max_level = data.get("maxLevel", data["level"])
         self.condition = data.get("condition")
-        self.significance = self.earnPerHour / self.price if self.price > 0 else 0
+        self.significance = self.earn_per_hour / self.price if self.price > 0 else 0
     
     def can_upgrade(self) -> bool:
         return self.is_available \

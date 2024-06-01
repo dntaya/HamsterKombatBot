@@ -12,6 +12,7 @@ from aiohttp_proxy import ProxyConnector
 
 from bot.config import settings
 from bot.core.upgrade import Upgrade
+from bot.core.profile import Profile
 from bot.core.web_client import WebClient
 
 from .headers import headers
@@ -20,23 +21,14 @@ from .headers import headers
 class Tapper:
     def __init__(self, web_client: WebClient) -> None:
         self.web_client = web_client
-        self.balance = 0
-        self.earn_per_hour = 0
-        self.available_energy = 0
-        self.taps_recover_per_sec = 0
-        self.earn_per_tap = 0
-        self.update_time = 0
+        self.session_name = web_client.session_name
+        self.profile = Profile(data={})
         
     def update_profile_params(self, data: dict) -> None:
-        self.earn_per_hour = data['earnPassivePerHour']
-        self.balance = int(data['balanceCoins'])
-        self.available_energy = data.get('availableTaps', 0)
-        self.taps_recover_per_sec = data.get('tapsRecoverPerSec', 0)
-        self.earn_per_tap = data.get('earnPerTap', 0)
-        self.update_time = time()
+        self.profile = Profile(data=data)
 
     async def earn_money(self) -> bool:
-        profile_data = await self.web_client()
+        profile_data = await self.web_client.get_profile_data()
 
         if not profile_data:
             return False
@@ -51,7 +43,7 @@ class Tapper:
         self.update_profile_params(data=profile_data)
 
         logger.info(f"{self.session_name} | Last passive earn: <g>+{last_passive_earn}</g> | "
-                    f"Earn every hour: <y>{self.earn_per_hour}</y>")
+                    f"Earn every hour: <y>{self.profile.earn_per_hour}</y>")
         return True
 
     async def make_upgrades(self):
@@ -61,33 +53,32 @@ class Tapper:
             available_upgrades = filter(lambda u: u.can_upgrade(), map(lambda data: Upgrade(data=data), upgrades))
 
             if not settings.WAIT_FOR_MOST_PROFIT_UPGRADES:
-                available_upgrades = filter(lambda u: self.balance > u.price, available_upgrades)
+                available_upgrades = filter(lambda u: self.profile.balance > u.price, available_upgrades)
 
-            available_upgrades.sort(key=operator.attrgetter("significance"), reverse=True)
+            available_upgrades = sorted(available_upgrades, key=lambda u: u.significance, reverse=True)
 
             if len(available_upgrades) == 0:
                 logger.info(f"{self.session_name} | No available upgrades")
                 break
 
-            most_profit_upgrade = available_upgrades[0]
+            most_profit_upgrade: Upgrade = available_upgrades[0]
 
-            if most_profit_upgrade.price > self.balance:
+            if most_profit_upgrade.price > self.profile.balance:
                 logger.info(f"{self.session_name} | Not enough money for upgrade <e>{most_profit_upgrade.name}</e>")
                 break
 
             logger.info(f"{self.session_name} | Sleep 3s before upgrade <e>{most_profit_upgrade.name}</e>")
-            await asyncio.sleep(delay=3)
+            await self.sleep(delay=3)
 
-            status = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
-            if status is True:
-                self.earn_per_hour += most_profit_upgrade.earn_per_hour
-                self.balance -= most_profit_upgrade.price
+            profile_data = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
+            if profile_data is not None:
+                self.update_profile_params(data=profile_data)
                 logger.success(
                     f"{self.session_name} | "
                     f"Successfully upgraded <e>{most_profit_upgrade.name}</e> to <m>{most_profit_upgrade.level}</m> lvl | "
-                    f"Earn every hour: <y>{self.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
+                    f"Earn every hour: <y>{self.profile.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
 
-                await asyncio.sleep(delay=1)
+                await self.sleep(delay=1)
 
     async def apply_energy_boost(self) -> bool:
         boosts = await self.web_client.get_boosts()
@@ -99,45 +90,46 @@ class Tapper:
         if profile_data is not None:
             self.update_profile_params(data=profile_data)
             logger.success(f"{self.session_name} | Successfully apply energy boost")
-            await asyncio.sleep(delay=1)
+            await self.sleep(delay=1)
 
     async def make_taps(self) -> bool:
-        max_taps = self.available_energy / self.earn_per_tap
+        max_taps = self.profile.getAvailableTaps()
         if max_taps < settings.MIN_AVAILABLE_TAPS:
-            if self.apply_energy_boost() is False:
-                logger.info(f"{self.session_name} | Not enough taps: {self.max_taps}/{settings.MIN_AVAILABLE_TAPS}")
-                return True
-            else:
-                max_taps = self.available_energy / self.earn_per_tap
+            logger.info(f"{self.session_name} | Not enough taps: {max_taps}/{settings.MIN_AVAILABLE_TAPS}")
+            return True
         
-        taps = randint(a=0, b=max_taps)
+        taps = randint(a=int(max_taps * 0.25), b=max_taps)
 
-        seconds_from_last_update = int(time() - self.update_time)
-        energy_recovered = self.taps_recover_per_sec * seconds_from_last_update
-        player_data = await self.web_client.send_taps(available_energy=self.available_energy + energy_recovered, taps=taps)
+        seconds_from_last_update = int(time() - self.profile.update_time)
+        energy_recovered = self.profile.energy_recover_per_sec * seconds_from_last_update
+        current_energy = min(self.profile.available_energy + energy_recovered, self.profile.max_energy)
+        player_data = await self.web_client.send_taps(available_energy=current_energy, taps=taps)
 
         if not player_data:
             return False
         
         new_balance = int(player_data.get('balanceCoins', 0))
-        calc_taps = new_balance - self.balance
+        calc_taps = new_balance - self.profile.balance
     
         self.update_profile_params(data=player_data)
 
-        logger.success(f"{self.session_name} | Successful tapped! | "
-                        f"Balance: <c>{self.balance}</c> (<g>+{calc_taps}</g>)")
+        logger.success(f"{self.session_name} | Successful tapped {taps} times! | "
+                        f"Balance: <c>{self.profile.balance}</c> (<g>+{calc_taps}</g>)")
         return True
+    
+    async def sleep(self, delay: int):
+        await asyncio.sleep(delay=float(delay))
+        self.profile.available_energy = min(self.profile.available_energy + self.profile.energy_recover_per_sec * delay, self.profile.max_energy)
 
 
     async def run(self) -> None:
         tasks_checking_time = 0
         earn_money_time = 0
-        turbo_time = 0
 
         while True:
             try:
                 # GET ACCESS TOKEN
-                self.web_client.check_auth()
+                await self.web_client.check_auth()
                 
                 # MONEY EARNING
                 if time() - earn_money_time >= 3600:
@@ -165,37 +157,36 @@ class Tapper:
                             
                 # UPGRADES
                 if settings.AUTO_UPGRADE is True:
-                    self.make_upgrades()
+                    await self.make_upgrades()
 
                 
                 # TAPPING
                 if settings.AUTO_CLICKER is True:
-                    self.make_taps()
+                    await self.make_taps()
 
-                # TODO: sleep for recover full energy
-                if available_energy < settings.MIN_AVAILABLE_ENERGY:
-                    logger.info(f"{self.session_name} | Minimum energy reached: {available_energy}")
-                    logger.info(f"{self.session_name} | Sleep {settings.SLEEP_BY_MIN_ENERGY}s")
+                # APPLY ENERGY BOOST
+                if self.profile.getAvailableTaps() < settings.MIN_AVAILABLE_TAPS and settings.APPLY_DAILY_ENERGY is True:
+                    await self.sleep(delay=3)
+                    if await self.apply_energy_boost():
+                        await self.sleep(delay=10)
+                        await self.make_taps()
 
-                    await asyncio.sleep(delay=settings.SLEEP_BY_MIN_ENERGY)
-
-                    continue
+                # SLEEP
+                if self.profile.getAvailableTaps() < settings.MIN_AVAILABLE_TAPS:
+                    sleep_time_to_recover_energy = (self.profile.max_energy - self.profile.available_energy) / self.profile.energy_recover_per_sec + 2 # 2s for safety :)
+                    logger.info(f"{self.session_name} | Sleep {sleep_time_to_recover_energy}s for recover full energy")
+                    await self.sleep(delay=sleep_time_to_recover_energy)
+                else: 
+                    sleep_between_taps = randint(a=settings.SLEEP_BETWEEN_TAP[0], b=settings.SLEEP_BETWEEN_TAP[1])
+                    logger.info(f"{self.session_name} | Sleep {sleep_between_taps}s")
+                    await self.sleep(delay=sleep_between_taps)
 
             except InvalidSession as error:
                 raise error
 
             except Exception as error:
                 logger.error(f"{self.session_name} | Unknown error: {error}")
-                await asyncio.sleep(delay=3)
-
-            else:
-                sleep_between_clicks = randint(a=settings.SLEEP_BETWEEN_TAP[0], b=settings.SLEEP_BETWEEN_TAP[1])
-
-                if active_turbo is True:
-                    sleep_between_clicks = 4
-
-                logger.info(f"Sleep {sleep_between_clicks}s")
-                await asyncio.sleep(delay=sleep_between_clicks)
+                await self.sleep(delay=3)
 
 
 async def run_tapper(tg_client: Client, proxy: str | None):

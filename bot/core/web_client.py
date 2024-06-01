@@ -108,7 +108,7 @@ class WebClient:
     async def login(self) -> str:
         response_text = ''
         try:
-            tg_web_data = self.get_tg_web_data()
+            tg_web_data = await self.get_tg_web_data()
 
             response = await self.http_client.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
                                               json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
@@ -226,7 +226,7 @@ class WebClient:
                          f"Response text: {escape_html(response_text)[:128]}...")
             await asyncio.sleep(delay=3)
 
-    async def buy_upgrade(self, upgrade_id: str) -> bool:
+    async def buy_upgrade(self, upgrade_id: str) -> dict[str]:
         response_text = ''
         try:
             response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/buy-upgrade',
@@ -234,14 +234,15 @@ class WebClient:
             response_text = await response.text()
             if response.status != 422:
                 response.raise_for_status()
+            
+            response_json = json.loads(response_text)
+            profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
 
-            return True
+            return profile_data
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error while buying Upgrade: {error} | "
                          f"Response text: {escape_html(response_text)[:128]}...")
             await asyncio.sleep(delay=3)
-
-            return False
 
     async def get_boosts(self) -> list[dict]:
         response_text = ''
