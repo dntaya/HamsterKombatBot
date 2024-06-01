@@ -1,448 +1,209 @@
-import json
-import asyncio
 import operator
+import asyncio
 from time import time
 from random import randint
-from urllib.parse import unquote
+from pyrogram import Client
+from bot.utils import logger
+from bot.exceptions import InvalidSession
 
 import aiohttp
 from aiohttp_proxy import ProxyConnector
-from better_proxy import Proxy
-from pyrogram import Client
-from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
-from pyrogram.raw.functions.messages import RequestWebView
+
 
 from bot.config import settings
-from bot.utils import logger
-from bot.utils.fingerprint import FINGERPRINT
-from bot.utils.scripts import escape_html
-from bot.exceptions import InvalidSession
+from bot.core.upgrade import Upgrade
+from bot.core.web_client import WebClient
+
 from .headers import headers
 
 
 class Tapper:
-    def __init__(self, tg_client: Client):
-        self.session_name = tg_client.name
-        self.tg_client = tg_client
+    def __init__(self, web_client: WebClient) -> None:
+        self.web_client = web_client
+        self.balance = 0
+        self.earn_per_hour = 0
+        self.available_energy = 0
+        self.taps_recover_per_sec = 0
+        self.earn_per_tap = 0
+        self.update_time = 0
+        
+    def update_profile_params(self, data: dict) -> None:
+        self.earn_per_hour = data['earnPassivePerHour']
+        self.balance = int(data['balanceCoins'])
+        self.available_energy = data.get('availableTaps', 0)
+        self.taps_recover_per_sec = data.get('tapsRecoverPerSec', 0)
+        self.earn_per_tap = data.get('earnPerTap', 0)
+        self.update_time = time()
 
-    async def get_tg_web_data(self, proxy: str | None) -> str:
-        if proxy:
-            proxy = Proxy.from_str(proxy)
-            proxy_dict = dict(
-                scheme=proxy.protocol,
-                hostname=proxy.host,
-                port=proxy.port,
-                username=proxy.login,
-                password=proxy.password
-            )
-        else:
-            proxy_dict = None
+    async def earn_money(self) -> bool:
+        profile_data = await self.web_client()
 
-        self.tg_client.proxy = proxy_dict
+        if not profile_data:
+            return False
+        
+        exchange_id = profile_data.get('exchangeId')
+        if not exchange_id:
+            status = await self.web_client.select_exchange(exchange_id="bybit")
+            if status is True:
+                logger.success(f"{self.session_name} | Successfully selected exchange <y>Bybit</y>")
 
-        try:
-            if not self.tg_client.is_connected:
-                try:
-                    await self.tg_client.connect()
-                except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
-                    raise InvalidSession(self.session_name)
+        last_passive_earn = profile_data['lastPassiveEarn']
+        self.update_profile_params(data=profile_data)
 
-            dialogs = self.tg_client.get_dialogs()
-            async for dialog in dialogs:
-                if dialog.chat and dialog.chat.username and dialog.chat.username == 'hamster_kombat_bot':
-                    break
+        logger.info(f"{self.session_name} | Last passive earn: <g>+{last_passive_earn}</g> | "
+                    f"Earn every hour: <y>{self.earn_per_hour}</y>")
+        return True
 
-            while True:
-                try:
-                    peer = await self.tg_client.resolve_peer('hamster_kombat_bot')
-                    break
-                except FloodWait as fl:
-                    fls = fl.value
+    async def make_upgrades(self):
+        while True:
+            upgrades = await self.web_client.get_upgrades()
 
-                    logger.warning(f"{self.session_name} | FloodWait {fl}")
-                    fls *= 2
-                    logger.info(f"{self.session_name} | Sleep {fls}s")
+            available_upgrades = filter(lambda u: u.can_upgrade(), map(lambda data: Upgrade(data=data), upgrades))
 
-                    await asyncio.sleep(fls)
+            if not settings.WAIT_FOR_MOST_PROFIT_UPGRADES:
+                available_upgrades = filter(lambda u: self.balance > u.price, available_upgrades)
 
-            web_view = await self.tg_client.invoke(RequestWebView(
-                peer=peer,
-                bot=peer,
-                platform='android',
-                from_bot_menu=False,
-                url='https://hamsterkombat.io/'
-            ))
+            available_upgrades.sort(key=operator.attrgetter("significance"), reverse=True)
 
-            auth_url = web_view.url
-            tg_web_data = unquote(
-                string=unquote(
-                    string=auth_url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
+            if len(available_upgrades) == 0:
+                logger.info(f"{self.session_name} | No available upgrades")
+                break
 
-            if self.tg_client.is_connected:
-                await self.tg_client.disconnect()
+            most_profit_upgrade = available_upgrades[0]
 
-            return tg_web_data
+            if most_profit_upgrade.price > self.balance:
+                logger.info(f"{self.session_name} | Not enough money for upgrade <e>{most_profit_upgrade.name}</e>")
+                break
 
-        except InvalidSession as error:
-            raise error
-
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error during Authorization: {error}")
+            logger.info(f"{self.session_name} | Sleep 3s before upgrade <e>{most_profit_upgrade.name}</e>")
             await asyncio.sleep(delay=3)
 
-    async def login(self, http_client: aiohttp.ClientSession, tg_web_data: str) -> str:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
-                                              json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
-            response_text = await response.text()
-            response.raise_for_status()
+            status = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
+            if status is True:
+                self.earn_per_hour += most_profit_upgrade.earn_per_hour
+                self.balance -= most_profit_upgrade.price
+                logger.success(
+                    f"{self.session_name} | "
+                    f"Successfully upgraded <e>{most_profit_upgrade.name}</e> to <m>{most_profit_upgrade.level}</m> lvl | "
+                    f"Earn every hour: <y>{self.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
 
-            response_json = await response.json()
-            access_token = response_json['authToken']
+                await asyncio.sleep(delay=1)
 
-            return access_token
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def get_profile_data(self, http_client: aiohttp.ClientSession) -> dict[str]:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/sync',
-                                              json={})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-
-            response_json = json.loads(response_text)
-            profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
-
-            return profile_data
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Profile Data: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def get_tasks(self, http_client: aiohttp.ClientSession) -> dict[str]:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/list-tasks',
-                                              json={})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            tasks = response_json['tasks']
-
-            return tasks
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Tasks: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def select_exchange(self, http_client: aiohttp.ClientSession, exchange_id: str) -> bool:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/select-exchange',
-                                              json={'exchangeId': exchange_id})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            return True
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while Select Exchange: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
+    async def apply_energy_boost(self) -> bool:
+        boosts = await self.web_client.get_boosts()
+        energy_boost = next((boost for boost in boosts if boost['id'] == 'BoostFullAvailableTaps'), {})
+        if energy_boost.get("cooldownSeconds", 0) != 0 and energy_boost.get("level", 0) <= energy_boost.get("maxLevel", 0):
             return False
 
-    async def get_daily(self, http_client: aiohttp.ClientSession):
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/check-task',
-                                              json={'taskId': "streak_days"})
-            response_text = await response.text()
-            response.raise_for_status()
+        profile_data = await self.web_client.apply_boost(boost_id="BoostFullAvailableTaps")
+        if profile_data is not None:
+            self.update_profile_params(data=profile_data)
+            logger.success(f"{self.session_name} | Successfully apply energy boost")
+            await asyncio.sleep(delay=1)
 
-            return True
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Daily: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
+    async def make_taps(self) -> bool:
+        max_taps = self.available_energy / self.earn_per_tap
+        if max_taps < settings.MIN_AVAILABLE_TAPS:
+            if self.apply_energy_boost() is False:
+                logger.info(f"{self.session_name} | Not enough taps: {self.max_taps}/{settings.MIN_AVAILABLE_TAPS}")
+                return True
+            else:
+                max_taps = self.available_energy / self.earn_per_tap
+        
+        taps = randint(a=0, b=max_taps)
 
+        seconds_from_last_update = int(time() - self.update_time)
+        energy_recovered = self.taps_recover_per_sec * seconds_from_last_update
+        player_data = await self.web_client.send_taps(available_energy=self.available_energy + energy_recovered, taps=taps)
+
+        if not player_data:
             return False
+        
+        new_balance = int(player_data.get('balanceCoins', 0))
+        calc_taps = new_balance - self.balance
+    
+        self.update_profile_params(data=player_data)
 
-    async def apply_boost(self, http_client: aiohttp.ClientSession, boost_id: str) -> bool:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/buy-boost',
-                                              json={'timestamp': time(), 'boostId': boost_id})
-            response_text = await response.text()
-            response.raise_for_status()
+        logger.success(f"{self.session_name} | Successful tapped! | "
+                        f"Balance: <c>{self.balance}</c> (<g>+{calc_taps}</g>)")
+        return True
 
-            return True
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while Apply {boost_id} Boost: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
 
-            return False
-
-    async def get_upgrades(self, http_client: aiohttp.ClientSession) -> list[dict]:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/upgrades-for-buy',
-                                              json={})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            upgrades = response_json['upgradesForBuy']
-
-            return upgrades
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Upgrades: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def buy_upgrade(self, http_client: aiohttp.ClientSession, upgrade_id: str) -> bool:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/buy-upgrade',
-                                              json={'timestamp': time(), 'upgradeId': upgrade_id})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-
-            return True
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while buying Upgrade: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-            return False
-
-    async def get_boosts(self, http_client: aiohttp.ClientSession) -> list[dict]:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/boosts-for-buy', json={})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            boosts = response_json['boostsForBuy']
-
-            return boosts
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Boosts: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def send_taps(self, http_client: aiohttp.ClientSession, available_energy: int, taps: int) -> dict[str]:
-        response_text = ''
-        try:
-            response = await http_client.post(url='https://api.hamsterkombat.io/clicker/tap',
-                                              json={'availableTaps': available_energy, 'count': taps,
-                                                    'timestamp': time()})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-
-            response_json = json.loads(response_text)
-            player_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
-
-            return player_data
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while Tapping: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: Proxy) -> None:
-        try:
-            response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
-            ip = (await response.json()).get('origin')
-            logger.info(f"{self.session_name} | Proxy IP: {ip}")
-        except Exception as error:
-            logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
-
-    async def run(self, proxy: str | None) -> None:
-        access_token_created_time = 0
+    async def run(self) -> None:
+        tasks_checking_time = 0
+        earn_money_time = 0
         turbo_time = 0
-        active_turbo = False
 
-        proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
-
-        async with aiohttp.ClientSession(headers=headers, connector=proxy_conn) as http_client:
-            if proxy:
-                await self.check_proxy(http_client=http_client, proxy=proxy)
-
-            tg_web_data = await self.get_tg_web_data(proxy=proxy)
-
-            while True:
-                try:
-                    if time() - access_token_created_time >= 3600:
-                        access_token = await self.login(http_client=http_client, tg_web_data=tg_web_data)
-
-                        if not access_token:
-                            continue
-
-                        http_client.headers["Authorization"] = f"Bearer {access_token}"
-
-                        access_token_created_time = time()
-
-                        profile_data = await self.get_profile_data(http_client=http_client)
-
-                        if not profile_data:
-                            continue
-
-                        exchange_id = profile_data.get('exchangeId')
-                        if not exchange_id:
-                            status = await self.select_exchange(http_client=http_client, exchange_id="bybit")
-                            if status is True:
-                                logger.success(f"{self.session_name} | Successfully selected exchange <y>Bybit</y>")
-
-                        last_passive_earn = profile_data['lastPassiveEarn']
-                        earn_on_hour = profile_data['earnPassivePerHour']
-
-                        logger.info(f"{self.session_name} | Last passive earn: <g>+{last_passive_earn}</g> | "
-                                    f"Earn every hour: <y>{earn_on_hour}</y>")
-
-                        available_energy = profile_data.get('availableTaps', 0)
-                        balance = int(profile_data.get('balanceCoins', 0))
-
-                        tasks = await self.get_tasks(http_client=http_client)
-
-                        daily_task = tasks[-1]
-                        rewards = daily_task['rewardsByDays']
-                        is_completed = daily_task['isCompleted']
-                        days = daily_task['days']
-
-                        if is_completed is False:
-                            status = await self.get_daily(http_client=http_client)
-                            if status is True:
-                                logger.success(f"{self.session_name} | Successfully get daily reward | "
-                                               f"Days: <m>{days}</m> | Reward coins: {rewards[days - 1]['rewardCoins']}")
-
-                    taps = randint(a=settings.RANDOM_TAPS_COUNT[0], b=settings.RANDOM_TAPS_COUNT[1])
-
-                    if active_turbo:
-                        taps += settings.ADD_TAPS_ON_TURBO
-                        if time() - turbo_time > 20:
-                            active_turbo = False
-                            turbo_time = 0
-
-                    player_data = await self.send_taps(http_client=http_client,
-                                                       available_energy=available_energy,
-                                                       taps=taps)
-
-                    if not player_data:
+        while True:
+            try:
+                # GET ACCESS TOKEN
+                self.web_client.check_auth()
+                
+                # MONEY EARNING
+                if time() - earn_money_time >= 3600:
+                    money_earned = await self.earn_money()
+                    if not money_earned:
                         continue
+                    else:
+                        earn_money_time = time()
 
-                    available_energy = player_data.get('availableTaps', 0)
-                    new_balance = int(player_data.get('balanceCoins', 0))
-                    calc_taps = new_balance - balance
-                    balance = new_balance
-                    total = int(player_data.get('totalCoins', 0))
-                    earn_on_hour = player_data['earnPassivePerHour']
+                # DAILY TASKS
+                if time() - tasks_checking_time >= 21600: # 6 hours
+                    tasks = await self.web_client.get_tasks()
+                    tasks_checking_time = time()
 
-                    boosts = await self.get_boosts(http_client=http_client)
-                    energy_boost = next((boost for boost in boosts if boost['id'] == 'BoostFullAvailableTaps'), {})
+                    daily_task = tasks[-1]
+                    rewards = daily_task['rewardsByDays']
+                    is_completed = daily_task['isCompleted']
+                    days = daily_task['days']
 
-                    logger.success(f"{self.session_name} | Successful tapped! | "
-                                   f"Balance: <c>{balance}</c> (<g>+{calc_taps}</g>) | Total: <e>{total}</e>")
+                    if is_completed is False:
+                        status = await self.web_client.get_daily()
+                        if status is True:
+                            logger.success(f"{self.session_name} | Successfully get daily reward | "
+                                            f"Days: <m>{days}</m> | Reward coins: {rewards[days - 1]['rewardCoins']}")
+                            
+                # UPGRADES
+                if settings.AUTO_UPGRADE is True:
+                    self.make_upgrades()
 
-                    if active_turbo is False:
-                        if (settings.APPLY_DAILY_ENERGY is True
-                                and available_energy < settings.MIN_AVAILABLE_ENERGY
-                                and energy_boost.get("cooldownSeconds", 0) == 0
-                                and energy_boost.get("level", 0) <= energy_boost.get("maxLevel", 0)):
-                            logger.info(f"{self.session_name} | Sleep 5s before apply energy boost")
-                            await asyncio.sleep(delay=5)
+                
+                # TAPPING
+                if settings.AUTO_CLICKER is True:
+                    self.make_taps()
 
-                            status = await self.apply_boost(http_client=http_client, boost_id="BoostFullAvailableTaps")
-                            if status is True:
-                                logger.success(f"{self.session_name} | Successfully apply energy boost")
+                # TODO: sleep for recover full energy
+                if available_energy < settings.MIN_AVAILABLE_ENERGY:
+                    logger.info(f"{self.session_name} | Minimum energy reached: {available_energy}")
+                    logger.info(f"{self.session_name} | Sleep {settings.SLEEP_BY_MIN_ENERGY}s")
 
-                                await asyncio.sleep(delay=1)
+                    await asyncio.sleep(delay=settings.SLEEP_BY_MIN_ENERGY)
 
-                                continue
+                    continue
 
-                        if settings.AUTO_UPGRADE is True:
-                            upgrades = await self.get_upgrades(http_client=http_client)
+            except InvalidSession as error:
+                raise error
 
-                            available_upgrades = [
-                                data for data in upgrades
-                                if data['isAvailable'] is True
-                                and data['isExpired'] is False
-                                and data.get('cooldownSeconds', 0) == 0
-                                and data.get('maxLevel', data['level']) >= data['level']
-                                and (data.get('condition') is None
-                                     or data['condition'].get('_type') != 'SubscribeTelegramChannel')
-                            ]
+            except Exception as error:
+                logger.error(f"{self.session_name} | Unknown error: {error}")
+                await asyncio.sleep(delay=3)
 
-                            queue = []
+            else:
+                sleep_between_clicks = randint(a=settings.SLEEP_BETWEEN_TAP[0], b=settings.SLEEP_BETWEEN_TAP[1])
 
-                            for upgrade in available_upgrades:
-                                upgrade_id = upgrade['id']
-                                level = upgrade['level']
-                                price = upgrade['price']
-                                profit = upgrade['profitPerHourDelta']
+                if active_turbo is True:
+                    sleep_between_clicks = 4
 
-                                significance = profit / price if price > 0 else 0
-
-                                if balance > price and level <= settings.MAX_LEVEL:
-                                    queue.append([upgrade_id, significance, level, price, profit])
-
-                            queue.sort(key=operator.itemgetter(1), reverse=True)
-
-                            for upgrade in queue:
-                                if balance > upgrade[3] and upgrade[2] <= settings.MAX_LEVEL:
-                                    logger.info(f"{self.session_name} | Sleep 5s before upgrade <e>{upgrade[0]}</e>")
-                                    await asyncio.sleep(delay=5)
-
-                                    status = await self.buy_upgrade(http_client=http_client, upgrade_id=upgrade[0])
-
-                                    if status is True:
-                                        earn_on_hour += upgrade[4]
-                                        balance -= upgrade[3]
-                                        logger.success(
-                                            f"{self.session_name} | "
-                                            f"Successfully upgraded <e>{upgrade[0]}</e> to <m>{upgrade[2]}</m> lvl | "
-                                            f"Earn every hour: <y>{earn_on_hour}</y> (<g>+{upgrade[4]}</g>)")
-
-                                        await asyncio.sleep(delay=1)
-
-                                continue
-
-                        if available_energy < settings.MIN_AVAILABLE_ENERGY:
-                            logger.info(f"{self.session_name} | Minimum energy reached: {available_energy}")
-                            logger.info(f"{self.session_name} | Sleep {settings.SLEEP_BY_MIN_ENERGY}s")
-
-                            await asyncio.sleep(delay=settings.SLEEP_BY_MIN_ENERGY)
-
-                            continue
-
-                except InvalidSession as error:
-                    raise error
-
-                except Exception as error:
-                    logger.error(f"{self.session_name} | Unknown error: {error}")
-                    await asyncio.sleep(delay=3)
-
-                else:
-                    sleep_between_clicks = randint(a=settings.SLEEP_BETWEEN_TAP[0], b=settings.SLEEP_BETWEEN_TAP[1])
-
-                    if active_turbo is True:
-                        sleep_between_clicks = 4
-
-                    logger.info(f"Sleep {sleep_between_clicks}s")
-                    await asyncio.sleep(delay=sleep_between_clicks)
+                logger.info(f"Sleep {sleep_between_clicks}s")
+                await asyncio.sleep(delay=sleep_between_clicks)
 
 
 async def run_tapper(tg_client: Client, proxy: str | None):
     try:
-        await Tapper(tg_client=tg_client).run(proxy=proxy)
+        proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
+
+        async with aiohttp.ClientSession(headers=headers, connector=proxy_conn) as http_client:
+            web_client = WebClient(http_client=http_client, tg_client=tg_client, proxy=proxy)
+            await Tapper(web_client=web_client).run()
     except InvalidSession:
         logger.error(f"{tg_client.name} | Invalid Session")

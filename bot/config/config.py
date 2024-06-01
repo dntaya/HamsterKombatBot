@@ -12,8 +12,13 @@ class Settings(BaseSettings):
 
     ADD_TAPS_ON_TURBO: int = 2500
 
+    MIN_AVAILABLE_TAPS: int = 15
+    WAIT_FOR_MOST_PROFIT_UPGRADES: bool = True
+
     AUTO_UPGRADE: bool = True
     MAX_LEVEL: int = 20
+
+    AUTO_CLICKER: bool = True
 
     APPLY_DAILY_ENERGY: bool = True
     APPLY_DAILY_TURBO: bool = True
