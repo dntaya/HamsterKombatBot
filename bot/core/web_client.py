@@ -2,23 +2,17 @@ import aiohttp
 import asyncio
 import json
 from time import time
-from pyrogram import Client
-from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
-from pyrogram.raw.functions.messages import RequestWebView
-from bot.utils.fingerprint import FINGERPRINT
-from bot.exceptions import InvalidSession
 from better_proxy import Proxy
-from urllib.parse import unquote
 from bot.utils import logger
+from bot.utils.client import Client
 from bot.utils.scripts import escape_html
 
 class WebClient:
-    def __init__(self, http_client: aiohttp.ClientSession, tg_client: Client, proxy: str | None):
+    def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
         self.http_client = http_client
-        self.session_name = tg_client.name
-        self.tg_client = tg_client
+        self.session_name = client.name
+        self.http_client.headers["Authorization"] = f"Bearer {client.token}"
         self.proxy = proxy
-        self.access_token_created_time = 0
 
     async def check_proxy(self, proxy: Proxy) -> None:
         try:
@@ -27,102 +21,6 @@ class WebClient:
             logger.info(f"{self.session_name} | Proxy IP: {ip}")
         except Exception as error:
             logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
-
-    async def check_auth(self) -> bool:
-        if time() - self.access_token_created_time >= 72000 or self.http_client.headers["Authorization"] == None:
-            access_token = await self.login()
-
-            if not access_token:
-                return False
-
-            self.http_client.headers["Authorization"] = f"Bearer {access_token}"
-            self.access_token_created_time = time()
-        return True
-
-
-    async def get_tg_web_data(self) -> str:
-        if self.proxy:
-            proxy = Proxy.from_str(proxy)
-            proxy_dict = dict(
-                scheme=proxy.protocol,
-                hostname=proxy.host,
-                port=proxy.port,
-                username=proxy.login,
-                password=proxy.password
-            )
-        else:
-            proxy_dict = None
-
-        self.tg_client.proxy = proxy_dict
-
-        try:
-            if not self.tg_client.is_connected:
-                try:
-                    await self.tg_client.connect()
-                except (Unauthorized, UserDeactivated, AuthKeyUnregistered):
-                    raise InvalidSession(self.session_name)
-
-            dialogs = self.tg_client.get_dialogs()
-            async for dialog in dialogs:
-                if dialog.chat and dialog.chat.username and dialog.chat.username == 'hamster_kombat_bot':
-                    break
-
-            while True:
-                try:
-                    peer = await self.tg_client.resolve_peer('hamster_kombat_bot')
-                    break
-                except FloodWait as fl:
-                    fls = fl.value
-
-                    logger.warning(f"{self.session_name} | FloodWait {fl}")
-                    fls *= 2
-                    logger.info(f"{self.session_name} | Sleep {fls}s")
-
-                    await asyncio.sleep(fls)
-
-            web_view = await self.tg_client.invoke(RequestWebView(
-                peer=peer,
-                bot=peer,
-                platform='android',
-                from_bot_menu=False,
-                url='https://hamsterkombat.io/'
-            ))
-
-            auth_url = web_view.url
-            tg_web_data = unquote(
-                string=unquote(
-                    string=auth_url.split('tgWebAppData=', maxsplit=1)[1].split('&tgWebAppVersion', maxsplit=1)[0]))
-
-            if self.tg_client.is_connected:
-                await self.tg_client.disconnect()
-
-            return tg_web_data
-
-        except InvalidSession as error:
-            raise error
-
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error during Authorization: {error}")
-            await asyncio.sleep(delay=3)
-
-    async def login(self) -> str:
-        response_text = ''
-        try:
-            tg_web_data = await self.get_tg_web_data()
-
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
-                                              json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            access_token = response_json['authToken']
-
-            return access_token
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Access Token: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
 
     async def get_profile_data(self) -> dict[str]:
         response_text = ''

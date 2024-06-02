@@ -1,9 +1,8 @@
-import operator
 import asyncio
 from time import time
 from random import randint
-from pyrogram import Client
 from bot.utils import logger
+from bot.utils.client import Client
 from bot.exceptions import InvalidSession
 
 import aiohttp
@@ -50,6 +49,8 @@ class Tapper:
     async def make_upgrades(self):
         while True:
             upgrades = await self.web_client.get_upgrades()
+
+            # TODO: Make combo
 
             available_upgrades = filter(lambda u: u.can_upgrade(), map(lambda data: Upgrade(data=data), upgrades))
 
@@ -209,12 +210,12 @@ class Tapper:
                 await self.sleep(delay=3)
 
 
-async def run_tapper(tg_client: Client, proxy: str | None):
+async def run_tapper(client: Client, proxy: str | None):
     try:
         proxy_conn = ProxyConnector().from_url(proxy) if proxy else None
 
         async with aiohttp.ClientSession(headers=headers, connector=proxy_conn) as http_client:
-            web_client = WebClient(http_client=http_client, tg_client=tg_client, proxy=proxy)
+            web_client = WebClient(http_client=http_client, client=client, proxy=proxy)
             await Tapper(web_client=web_client).run()
     except InvalidSession:
-        logger.error(f"{tg_client.name} | Invalid Session")
+        logger.error(f"{client.name} | Invalid Session")

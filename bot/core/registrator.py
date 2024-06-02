@@ -1,29 +1,20 @@
-from pyrogram import Client
 
-from bot.config import settings
 from bot.utils import logger
 
 
-async def register_sessions() -> None:
-    API_ID = settings.API_ID
-    API_HASH = settings.API_HASH
+async def register_client() -> None:
+    client_name = input('\nEnter the client name (press Enter to exit): ')
 
-    if not API_ID or not API_HASH:
-        raise ValueError("API_ID and API_HASH not found in the .env file.")
-
-    session_name = input('\nEnter the session name (press Enter to exit): ')
-
-    if not session_name:
+    if not client_name:
         return None
 
-    session = Client(
-        name=session_name,
-        api_id=API_ID,
-        api_hash=API_HASH,
-        workdir="sessions/"
-    )
+    token = input('\nEnter the token (press Enter to exit): ')
 
-    async with session:
-        user_data = await session.get_me()
+    if not token:
+        return None
 
-    logger.success(f'Session added successfully @{user_data.username} | {user_data.first_name} {user_data.last_name}')
+    f = open(f"clients/{client_name}.client", "a")
+    f.write(token)
+    f.close()
+
+    logger.success(f'Client `{client_name}` added successfully')
