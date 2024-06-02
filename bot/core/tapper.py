@@ -91,7 +91,7 @@ class Tapper:
     async def apply_energy_boost(self) -> bool:
         boosts = await self.web_client.get_boosts()
         energy_boost = next((boost for boost in boosts if boost['id'] == 'BoostFullAvailableTaps'), {})
-        if energy_boost.get("cooldownSeconds", 0) != 0 and energy_boost.get("level", 0) <= energy_boost.get("maxLevel", 0):
+        if energy_boost.get("cooldownSeconds", 0) != 0 or energy_boost.get("level", 0) >= energy_boost.get("maxLevel", 0):
             return False
 
         profile_data = await self.web_client.apply_boost(boost_id="BoostFullAvailableTaps")
@@ -181,7 +181,7 @@ class Tapper:
 
                     # APPLY ENERGY BOOST
                     if settings.APPLY_DAILY_ENERGY is True:
-                        logger.info(f"{self.session_name} | Sleep 5s before apply energy boost")
+                        logger.info(f"{self.session_name} | Sleep 5s before checking energy boost")
                         await self.sleep(delay=5)
                         if await self.apply_energy_boost():
                             await self.make_taps()
