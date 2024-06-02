@@ -30,6 +30,5 @@ class Upgrade:
     def can_upgrade(self) -> bool:
         return self.is_available \
             and not self.is_expired \
-            and self.cooldown_seconds == 0 \
             and self.max_level >= self.level \
             and (self.condition is None or self.condition.get("_type") != "SubscribeTelegramChannel")

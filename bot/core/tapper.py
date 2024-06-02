@@ -54,7 +54,7 @@ class Tapper:
             available_upgrades = filter(lambda u: u.can_upgrade(), map(lambda data: Upgrade(data=data), upgrades))
 
             if not settings.WAIT_FOR_MOST_PROFIT_UPGRADES:
-                available_upgrades = filter(lambda u: self.profile.balance > u.price, available_upgrades)
+                available_upgrades = filter(lambda u: self.profile.balance > u.price and u.cooldown_seconds == 0, available_upgrades)
 
             available_upgrades = sorted(available_upgrades, key=lambda u: u.significance, reverse=True)
 
@@ -67,6 +67,11 @@ class Tapper:
             if most_profit_upgrade.price > self.profile.balance:
                 logger.info(f"{self.session_name} | Not enough money for upgrade <e>{most_profit_upgrade.name}</e>")
                 self.preferred_sleep_time = int((most_profit_upgrade.price - self.profile.balance) / self.profile.earn_per_sec) + 2
+                break
+
+            if most_profit_upgrade.cooldown_seconds > 0:
+                logger.info(f"{self.session_name} | Upgrade <e>{most_profit_upgrade.name}</e> on cooldown")
+                self.preferred_sleep_time = most_profit_upgrade.cooldown_seconds + 2
                 break
 
             sleep_time = randint(10, 40)
