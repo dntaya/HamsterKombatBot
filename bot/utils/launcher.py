@@ -11,6 +11,7 @@ from bot.config import settings
 from bot.utils import logger
 from bot.core.tapper import run_tapper
 from bot.core.registrator import register_client
+from bot.core.registrator import create_token
 
 
 start_text = """
@@ -23,6 +24,7 @@ Select an action:
 
     1. Create session
     2. Run clicker
+    3. Create token
 """
 
 
@@ -73,8 +75,8 @@ async def process() -> None:
 
             if not action.isdigit():
                 logger.warning("Action must be number")
-            elif action not in ['1', '2']:
-                logger.warning("Action must be 1 or 2")
+            elif action not in ['1', '2', '3']:
+                logger.warning("Action must be 1, 2 or 3")
             else:
                 action = int(action)
                 break
@@ -85,6 +87,8 @@ async def process() -> None:
         clients = await get_clients()
 
         await run_tasks(clients=clients)
+    elif action == 3:
+        print(await create_token())
 
 
 async def run_tasks(clients: list[Client]):

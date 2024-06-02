@@ -146,9 +146,6 @@ class Tapper:
 
         while True:
             try:
-                # GET ACCESS TOKEN
-                await self.web_client.check_auth()
-                
                 # MONEY EARNING
                 if time() - earn_money_time >= 3600:
                     money_earned = await self.earn_money()
