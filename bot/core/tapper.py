@@ -110,7 +110,8 @@ class Tapper:
         seconds_from_last_update = int(time() - self.profile.update_time)
         energy_recovered = self.profile.energy_recover_per_sec * seconds_from_last_update
         current_energy = min(self.profile.available_energy + energy_recovered, self.profile.max_energy)
-        simulated_taps = available_taps + int(available_taps * 0.02) # add 2% taps like official app when you clicking by yourself
+        random_simulated_taps_percent = randint(1, 4) / 100
+        simulated_taps = available_taps + int(available_taps * random_simulated_taps_percent) # add 1-4% taps like official app when you clicking by yourself
 
         # sleep before taps like you do it in real like 6 taps per second
         sleep_time = int(available_taps / 6)
