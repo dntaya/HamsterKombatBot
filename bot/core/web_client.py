@@ -1,11 +1,12 @@
 import aiohttp
 import asyncio
-import json
+import json as json_parser
 from time import time
 from better_proxy import Proxy
 from bot.utils import logger
 from bot.utils.client import Client
 from bot.utils.scripts import escape_html
+from bot.core.headers import additional_headers_for_empty_requests, createAdditionalHeadersForDataRequests
 
 class WebClient:
     def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
@@ -22,16 +23,22 @@ class WebClient:
         except Exception as error:
             logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
 
+    async def data_request(self, url: str, json: dict) -> aiohttp.ClientResponse:
+        request_data = json_parser.dumps(json).encode('utf-8')
+        return await self.http_client.post(url=url, headers=createAdditionalHeadersForDataRequests(content_length=len(request_data)), data=request_data)
+        
+
     async def get_profile_data(self) -> dict[str]:
         response_text = ''
         try:
             response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/sync',
-                                              json={})
+                                                   headers=additional_headers_for_empty_requests,
+                                                   json={})
             response_text = await response.text()
             if response.status != 422:
                 response.raise_for_status()
 
-            response_json = json.loads(response_text)
+            response_json = json_parser.loads(response_text)
             profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
 
             return profile_data
@@ -44,7 +51,8 @@ class WebClient:
         response_text = ''
         try:
             response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/list-tasks',
-                                              json={})
+                                                   headers=additional_headers_for_empty_requests,
+                                                   json={})
             response_text = await response.text()
             response.raise_for_status()
 
@@ -60,8 +68,8 @@ class WebClient:
     async def select_exchange(self, exchange_id: str) -> bool:
         response_text = ''
         try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/select-exchange',
-                                              json={'exchangeId': exchange_id})
+            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/select-exchange',
+                                               json={'exchangeId': exchange_id})
             response_text = await response.text()
             response.raise_for_status()
 
@@ -76,10 +84,11 @@ class WebClient:
     async def get_daily(self):
         response_text = ''
         try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/check-task',
+            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/check-task',
                                               json={'taskId': "streak_days"})
             response_text = await response.text()
-            response.raise_for_status()
+            if response.status != 422:
+                response.raise_for_status()
 
             return True
         except Exception as error:
@@ -92,13 +101,13 @@ class WebClient:
     async def apply_boost(self, boost_id: str) -> dict[str]:
         response_text = ''
         try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/buy-boost',
-                                              json={'timestamp': time(), 'boostId': boost_id})
+            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/buy-boost',
+                                               json={'timestamp': time(), 'boostId': boost_id})
             response_text = await response.text()
             if response.status != 422:
                 response.raise_for_status()
 
-            response_json = json.loads(response_text)
+            response_json = json_parser.loads(response_text)
             profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
 
             return profile_data
@@ -111,7 +120,8 @@ class WebClient:
         response_text = ''
         try:
             response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/upgrades-for-buy',
-                                              json={})
+                                                   headers=additional_headers_for_empty_requests,
+                                                   json={})
             response_text = await response.text()
             response.raise_for_status()
 
@@ -127,13 +137,13 @@ class WebClient:
     async def buy_upgrade(self, upgrade_id: str) -> dict[str]:
         response_text = ''
         try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/buy-upgrade',
-                                              json={'timestamp': time(), 'upgradeId': upgrade_id})
+            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/buy-upgrade',
+                                               json={'timestamp': time(), 'upgradeId': upgrade_id})
             response_text = await response.text()
             if response.status != 422:
                 response.raise_for_status()
             
-            response_json = json.loads(response_text)
+            response_json = json_parser.loads(response_text)
             profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
 
             return profile_data
@@ -145,7 +155,9 @@ class WebClient:
     async def get_boosts(self) -> list[dict]:
         response_text = ''
         try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/boosts-for-buy', json={})
+            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/boosts-for-buy', 
+                                                   headers=additional_headers_for_empty_requests,
+                                                   json={})
             response_text = await response.text()
             response.raise_for_status()
 
@@ -161,14 +173,13 @@ class WebClient:
     async def send_taps(self, available_energy: int, taps: int) -> dict[str]:
         response_text = ''
         try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/tap',
-                                              json={'availableTaps': available_energy, 'count': taps,
-                                                    'timestamp': time()})
+            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/tap',
+                                               json={'availableTaps': available_energy, 'count': taps, 'timestamp': time()})
             response_text = await response.text()
             if response.status != 422:
                 response.raise_for_status()
 
-            response_json = json.loads(response_text)
+            response_json = json_parser.loads(response_text)
             profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
 
             return profile_data
