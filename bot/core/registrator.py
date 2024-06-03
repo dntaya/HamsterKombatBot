@@ -6,7 +6,7 @@ import asyncio
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw.functions.messages import RequestWebView
 from bot.exceptions import InvalidSession
-from pyrogram import TgClient
+from pyrogram import Client as TgClient
 from urllib.parse import unquote
 from bot.utils.fingerprint import FINGERPRINT
 from bot.config import settings
