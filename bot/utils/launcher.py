@@ -10,8 +10,7 @@ from better_proxy import Proxy
 from bot.config import settings
 from bot.utils import logger
 from bot.core.tapper import run_tapper
-from bot.core.registrator import register_client
-from bot.core.registrator import create_token
+from bot.core.registrator import register_client, register_client_by_tg_auth
 
 
 start_text = """
@@ -22,9 +21,9 @@ start_text = """
 
 Select an action:
 
-    1. Create session
+    1. Create client by token
     2. Run clicker
-    3. Create token
+    3. Create client by tg auth
 """
 
 
@@ -88,7 +87,7 @@ async def process() -> None:
 
         await run_tasks(clients=clients)
     elif action == 3:
-        print(await create_token())
+        await register_client_by_tg_auth()
 
 
 async def run_tasks(clients: list[Client]):
