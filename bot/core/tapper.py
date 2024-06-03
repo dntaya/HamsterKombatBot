@@ -130,8 +130,7 @@ class Tapper:
         self.update_profile_params(data=player_data)
 
         logger.success(f"{self.session_name} | Successful tapped <c>{simulated_taps}</c> times! | "
-                        f"Server accepted <c>{int(calc_taps/self.profile.earn_per_tap)}</c> taps | "
-                        f"Balance: <c>{self.profile.balance}</c> (<g>+{calc_taps}</g>)")
+                       f"Balance: <c>{self.profile.balance}</c> (<g>+{calc_taps}</g>)")
         return True
     
     async def sleep(self, delay: int):
@@ -187,7 +186,7 @@ class Tapper:
 
                 # SLEEP
                 if settings.AUTO_CLICKER is True:
-                    sleep_time_to_recover_energy = (self.profile.max_energy - self.profile.available_energy) / self.profile.energy_recover_per_sec + 2 # 2s for safety :)
+                    sleep_time_to_recover_energy = (self.profile.max_energy - self.profile.available_energy) / self.profile.energy_recover_per_sec
                     logger.info(f"{self.session_name} | Sleep {sleep_time_to_recover_energy}s for recover full energy")
                     await self.sleep(delay=sleep_time_to_recover_energy)
                 elif self.preferred_sleep_time > 60:
