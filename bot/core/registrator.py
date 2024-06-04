@@ -23,7 +23,7 @@ async def register_client() -> None:
 
     if not token:
         return None
-    add_client(client=Client(name=client_name, token=token))
+    await add_client(client=Client(name=client_name, token=token))
 
 async def add_client(client: Client) -> None:
     if os.path.isdir('clients') is False:
@@ -51,7 +51,7 @@ async def register_client_by_tg_auth() -> None:
         response_json = response.json()
         access_token = response_json['authToken']
 
-        add_client(client=Client(name=client_name, token=access_token))
+        await add_client(client=Client(name=client_name, token=access_token))
     except Exception as error:
         logger.error(f"Unknown error while getting Access Token: {error}")
 
