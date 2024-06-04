@@ -74,7 +74,7 @@ class WebClient:
     async def buy_upgrade(self, upgrade_id: str) -> ProfileAndUpgrades | None:
         response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
         if response is not None:
-            profile_data = response.get('clickerUser')
+            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
 
             return ProfileAndUpgrades(profile=Profile(data=profile_data),
                                       upgrades=list(map(lambda x: Upgrade(data=x), profile_data['upgradesForBuy'])))
