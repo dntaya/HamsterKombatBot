@@ -1,6 +1,7 @@
 import asyncio
 from time import time
 from random import randint
+import traceback
 from bot.utils import logger
 from bot.utils.client import Client
 from bot.exceptions import InvalidSession
@@ -203,6 +204,7 @@ class Tapper:
 
             except Exception as error:
                 logger.error(f"{self.session_name} | Unknown error: {error}")
+                traceback.print_exc()
                 await self.sleep(delay=3)
 
 
