@@ -1,5 +1,5 @@
 import aiohttp
-import asyncio
+import traceback
 import json as json_parser
 from time import time
 from better_proxy import Proxy
@@ -118,3 +118,4 @@ class WebClient:
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error in request: {error} | "
                          f"Response text: {escape_html(response_text)[:128]}")
+            traceback.print_exc()
