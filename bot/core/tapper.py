@@ -80,11 +80,17 @@ class Tapper:
             profile_and_upgrades = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
             if profile_and_upgrades is not None:
                 self.profile = profile_and_upgrades.profile
-                self.upgrades = profile_and_upgrades.upgrades
+
                 logger.success(
                     f"{self.session_name} | "
                     f"Successfully upgraded <e>{most_profit_upgrade.name}</e> to <m>{most_profit_upgrade.level}</m> lvl | "
                     f"Earn every hour: <y>{self.profile.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
+
+                if len(profile_and_upgrades.upgrades) == 0:
+                    logger.error(f"{self.session_name} | No upgrades in response")
+                    break
+                else:
+                    self.upgrades = profile_and_upgrades.upgrades
 
                 await self.sleep(delay=1)
             else:

@@ -77,7 +77,7 @@ class WebClient:
             profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
 
             return ProfileAndUpgrades(profile=Profile(data=profile_data),
-                                      upgrades=list(map(lambda x: Upgrade(data=x), profile_data['upgradesForBuy'])))
+                                      upgrades=list(map(lambda x: Upgrade(data=x), response.get('upgradesForBuy', []))))
 
     async def get_boosts(self) -> list[Boost] | None:
         response = await self.make_request(Requests.BOOSTS_FOR_BUY)
