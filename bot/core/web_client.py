@@ -114,7 +114,7 @@ class WebClient:
             if response.status != 422:
                 response.raise_for_status()
 
-            return await response.json()
+            return await json_parser.loads(response_text)
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error in request: {error} | "
                          f"Response text: {escape_html(response_text)[:128]}")
