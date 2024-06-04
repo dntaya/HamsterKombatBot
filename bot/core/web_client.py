@@ -7,6 +7,21 @@ from bot.utils import logger
 from bot.utils.client import Client
 from bot.utils.scripts import escape_html
 from bot.core.headers import additional_headers_for_empty_requests, createAdditionalHeadersForDataRequests
+from bot.core.entities import Boost, Upgrade, Profile, Task, ProfileAndUpgrades
+from enum import StrEnum
+
+class Requests(StrEnum):
+    CONFIG="https://api.hamsterkombat.io/clicker/config"
+    ME_TELEGRAM="https://api.hamsterkombat.io/auth/me-telegram"
+    TAP="https://api.hamsterkombat.io/clicker/tap"
+    BOOSTS_FOR_BUY="https://api.hamsterkombat.io/clicker/boosts-for-buy"
+    BUY_UPGRADE="https://api.hamsterkombat.io/clicker/buy-upgrade"
+    UPGRADES_FOR_BUY="https://api.hamsterkombat.io/clicker/upgrades-for-buy"
+    BUY_BOOST="https://api.hamsterkombat.io/clicker/buy-boost"
+    CHECK_TASK="https://api.hamsterkombat.io/clicker/check-task"
+    SELECT_EXCHANGE="https://api.hamsterkombat.io/clicker/select-exchange"
+    LIST_TASKS="https://api.hamsterkombat.io/clicker/list-tasks"
+    SYNC="https://api.hamsterkombat.io/clicker/sync"
 
 class WebClient:
     def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
@@ -23,167 +38,83 @@ class WebClient:
         except Exception as error:
             logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
 
-    async def data_request(self, url: str, json: dict) -> aiohttp.ClientResponse:
-        request_data = json_parser.dumps(json).encode('utf-8')
-        return await self.http_client.post(url=url, headers=createAdditionalHeadersForDataRequests(content_length=len(request_data)), data=request_data)
-        
+    async def get_profile_data(self) -> Profile | None:
+        response = await self.make_request(Requests.SYNC)
+        if response is not None:
+            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+            return Profile(data=profile_data)
 
-    async def get_profile_data(self) -> dict[str]:
-        response_text = ''
-        try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/sync',
-                                                   headers=additional_headers_for_empty_requests,
-                                                   json={})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-
-            response_json = json_parser.loads(response_text)
-            profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
-
-            return profile_data
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Profile Data: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def get_tasks(self) -> dict[str]:
-        response_text = ''
-        try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/list-tasks',
-                                                   headers=additional_headers_for_empty_requests,
-                                                   json={})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            tasks = response_json['tasks']
-
-            return tasks
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Tasks: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
+    async def get_tasks(self) -> list[Task]:
+        response = await self.make_request(Requests.LIST_TASKS)
+        if response is not None:
+            return list(map(lambda d: Task(data=d), response['tasks']))
+        else:
+            return []
 
     async def select_exchange(self, exchange_id: str) -> bool:
-        response_text = ''
-        try:
-            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/select-exchange',
-                                               json={'exchangeId': exchange_id})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            return True
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while Select Exchange: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-            return False
+        response = await self.make_request(Requests.SELECT_EXCHANGE, json={'exchangeId': exchange_id})
+        return response is not None
 
     async def get_daily(self):
+        response = await self.make_request(Requests.CHECK_TASK, json={'taskId': "streak_days"})
+        return response is not None
+
+    async def apply_boost(self, boost_id: str) -> Profile | None:
+        response = await self.make_request(Requests.BUY_BOOST, json={'timestamp': time(), 'boostId': boost_id})
+        if response is not None:
+            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+
+            return Profile(data=profile_data)
+
+    async def get_upgrades(self) -> list[Upgrade] | None:
+        response = await self.make_request(Requests.UPGRADES_FOR_BUY)
+        if response is not None:
+            return list(map(lambda x: Upgrade(data=x), response['upgradesForBuy']))
+
+    async def buy_upgrade(self, upgrade_id: str) -> ProfileAndUpgrades | None:
+        response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
+        if response is not None:
+            profile_data = response.get('clickerUser')
+
+            return ProfileAndUpgrades(profile=Profile(data=profile_data),
+                                      upgrades=list(map(lambda x: Upgrade(data=x), profile_data['upgradesForBuy'])))
+
+    async def get_boosts(self) -> list[Boost] | None:
+        response = await self.make_request(Requests.BOOSTS_FOR_BUY)
+        if response is not None:
+            return list(map(lambda x: Boost(data=x), response['boostsForBuy']))
+
+    async def send_taps(self, available_energy: int, taps: int) -> Profile | None:
+        response = await self.make_request(Requests.TAP, json={'availableTaps': available_energy, 'count': taps, 'timestamp': time()})
+        if response is not None:
+            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+
+            return Profile(data=profile_data)
+        
+    async def get_me_telegram(self) -> None:
+        await self.make_request(Requests.ME_TELEGRAM)
+    
+    async def get_config(self) -> None:
+        await self.make_request(Requests.CONFIG)
+
+    async def make_request(self, request: Requests, json: dict = {}) -> dict | None:
         response_text = ''
         try:
-            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/check-task',
-                                              json={'taskId': "streak_days"})
+            headers = {}
+            data = json_parser.dumps(json).encode('utf-8')
+            if len(json) == 0:
+                headers = additional_headers_for_empty_requests
+            else:
+                headers = createAdditionalHeadersForDataRequests(content_length=len(data))
+
+            response = await self.http_client.post(url=request.value,
+                                                   headers=headers,
+                                                   data=data if len(json) > 0 else None)
             response_text = await response.text()
             if response.status != 422:
                 response.raise_for_status()
 
-            return True
+            return await response.json()
         except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Daily: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-            return False
-
-    async def apply_boost(self, boost_id: str) -> dict[str]:
-        response_text = ''
-        try:
-            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/buy-boost',
-                                               json={'timestamp': time(), 'boostId': boost_id})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-
-            response_json = json_parser.loads(response_text)
-            profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
-
-            return profile_data
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while Apply {boost_id} Boost: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def get_upgrades(self) -> list[dict]:
-        response_text = ''
-        try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/upgrades-for-buy',
-                                                   headers=additional_headers_for_empty_requests,
-                                                   json={})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            upgrades = response_json['upgradesForBuy']
-
-            return upgrades
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Upgrades: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def buy_upgrade(self, upgrade_id: str) -> dict[str]:
-        response_text = ''
-        try:
-            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/buy-upgrade',
-                                               json={'timestamp': time(), 'upgradeId': upgrade_id})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-            
-            response_json = json_parser.loads(response_text)
-            profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
-
-            return profile_data
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while buying Upgrade: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def get_boosts(self) -> list[dict]:
-        response_text = ''
-        try:
-            response = await self.http_client.post(url='https://api.hamsterkombat.io/clicker/boosts-for-buy', 
-                                                   headers=additional_headers_for_empty_requests,
-                                                   json={})
-            response_text = await response.text()
-            response.raise_for_status()
-
-            response_json = await response.json()
-            boosts = response_json['boostsForBuy']
-
-            return boosts
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while getting Boosts: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
-
-    async def send_taps(self, available_energy: int, taps: int) -> dict[str]:
-        response_text = ''
-        try:
-            response = await self.data_request(url='https://api.hamsterkombat.io/clicker/tap',
-                                               json={'availableTaps': available_energy, 'count': taps, 'timestamp': time()})
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
-
-            response_json = json_parser.loads(response_text)
-            profile_data = response_json.get('clickerUser') or response_json.get('found', {}).get('clickerUser', {})
-
-            return profile_data
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error while Tapping: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}...")
-            await asyncio.sleep(delay=3)
+            logger.error(f"{self.session_name} | Unknown error in request: {error} | "
+                         f"Response text: {escape_html(response_text)[:128]}")

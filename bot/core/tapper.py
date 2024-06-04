@@ -10,8 +10,7 @@ from aiohttp_proxy import ProxyConnector
 
 
 from bot.config import settings
-from bot.core.upgrade import Upgrade
-from bot.core.profile import Profile
+from bot.core.entities import Upgrade, Profile, Boost, Task
 from bot.core.web_client import WebClient
 
 from .headers import headers
@@ -22,37 +21,35 @@ class Tapper:
         self.web_client = web_client
         self.session_name = web_client.session_name
         self.profile = Profile(data={})
+        self.upgrades: list[Upgrade] = []
+        self.boosts: list[Boost] = []
+        self.tasks: list[Task] = []
         self.preferred_sleep_time = 0
         
     def update_profile_params(self, data: dict) -> None:
         self.profile = Profile(data=data)
 
     async def earn_money(self) -> bool:
-        profile_data = await self.web_client.get_profile_data()
+        profile = await self.web_client.get_profile_data()
 
-        if not profile_data:
+        if not profile:
             return False
         
-        exchange_id = profile_data.get('exchangeId')
-        if not exchange_id:
+        self.profile = profile
+        
+        if self.profile.exchange_id is None:
             status = await self.web_client.select_exchange(exchange_id="bybit")
             if status is True:
                 logger.success(f"{self.session_name} | Successfully selected exchange <y>Bybit</y>")
 
-        last_passive_earn = profile_data['lastPassiveEarn']
-        self.update_profile_params(data=profile_data)
-
-        logger.info(f"{self.session_name} | Last passive earn: <g>+{last_passive_earn}</g> | "
+        logger.info(f"{self.session_name} | Last passive earn: <g>+{self.profile.last_passive_earn}</g> | "
                     f"Earn every hour: <y>{self.profile.earn_per_hour}</y>")
         return True
 
     async def make_upgrades(self):
         while True:
-            upgrades = await self.web_client.get_upgrades()
-
             # TODO: Make combo
-
-            available_upgrades = filter(lambda u: u.can_upgrade(), map(lambda data: Upgrade(data=data), upgrades))
+            available_upgrades = filter(lambda u: u.can_upgrade(), self.upgrades)
 
             if not settings.WAIT_FOR_MOST_PROFIT_UPGRADES:
                 available_upgrades = filter(lambda u: self.profile.balance > u.price and u.cooldown_seconds == 0, available_upgrades)
@@ -79,25 +76,27 @@ class Tapper:
             logger.info(f"{self.session_name} | Sleep {sleep_time}s before upgrade <e>{most_profit_upgrade.name}</e>")
             await self.sleep(delay=sleep_time)
 
-            profile_data = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
-            if profile_data is not None:
-                self.update_profile_params(data=profile_data)
+            profile_and_upgrades = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
+            if profile_and_upgrades is not None:
+                self.profile = profile_and_upgrades.profile
+                self.upgrades = profile_and_upgrades.upgrades
                 logger.success(
                     f"{self.session_name} | "
                     f"Successfully upgraded <e>{most_profit_upgrade.name}</e> to <m>{most_profit_upgrade.level}</m> lvl | "
                     f"Earn every hour: <y>{self.profile.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
 
                 await self.sleep(delay=1)
+            else:
+                break
 
     async def apply_energy_boost(self) -> bool:
-        boosts = await self.web_client.get_boosts()
-        energy_boost = next((boost for boost in boosts if boost['id'] == 'BoostFullAvailableTaps'), {})
-        if energy_boost.get("cooldownSeconds", 0) != 0 or energy_boost.get("level", 0) >= energy_boost.get("maxLevel", 0):
+        energy_boost = next((boost for boost in self.boosts if boost.id == 'BoostFullAvailableTaps'), {})
+        if energy_boost.cooldown_seconds != 0 or energy_boost.level >= energy_boost.max_level:
             return False
 
-        profile_data = await self.web_client.apply_boost(boost_id="BoostFullAvailableTaps")
-        if profile_data is not None:
-            self.update_profile_params(data=profile_data)
+        profile = await self.web_client.apply_boost(boost_id="BoostFullAvailableTaps")
+        if profile is not None:
+            self.profile = profile
             logger.success(f"{self.session_name} | Successfully apply energy boost")
             return True
         return False
@@ -119,15 +118,15 @@ class Tapper:
         logger.info(f"{self.session_name} | Sleep {sleep_time}s before taps")
         await self.sleep(delay=sleep_time)
 
-        player_data = await self.web_client.send_taps(available_energy=current_energy, taps=simulated_taps)
+        profile = await self.web_client.send_taps(available_energy=current_energy, taps=simulated_taps)
 
-        if not player_data:
+        if not profile:
             return False
         
-        new_balance = int(player_data.get('balanceCoins', 0))
+        new_balance = int(profile.balance)
         calc_taps = new_balance - self.profile.balance
     
-        self.update_profile_params(data=player_data)
+        self.profile = profile
 
         logger.success(f"{self.session_name} | Successful tapped <c>{simulated_taps}</c> times! | "
                        f"Balance: <c>{self.profile.balance}</c> (<g>+{calc_taps}</g>)")
@@ -140,49 +139,50 @@ class Tapper:
 
 
     async def run(self) -> None:
-        tasks_checking_time = 0
-        earn_money_time = 0
-
         while True:
             try:
-                # MONEY EARNING
-                if time() - earn_money_time >= 3600:
-                    money_earned = await self.earn_money()
-                    if not money_earned:
-                        continue
-                    else:
-                        earn_money_time = time()
+                """
+                Sequence of requests in the client
+                    - me-telegram
+                    - config
+                    - sync
+                    - upgrades-for-buy
+                    - boosts-for-buy
+                    - list-tasks
+                """
+                await self.web_client.get_me_telegram()
+                await self.web_client.get_config()
+                money_earned = await self.earn_money()
+                if not money_earned:
+                    logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
+                    await self.sleep(delay=3600)
+                    continue
+                self.upgrades = await self.web_client.get_upgrades()
+                self.boosts = await self.web_client.get_boosts()
+                self.tasks = await self.web_client.get_tasks()
 
                 # DAILY TASKS
-                if time() - tasks_checking_time >= 21600: # 6 hours
-                    tasks = await self.web_client.get_tasks()
-                    tasks_checking_time = time()
-
-                    daily_task = tasks[-1]
-                    rewards = daily_task['rewardsByDays']
-                    is_completed = daily_task['isCompleted']
-                    days = daily_task['days']
-
-                    if is_completed is False:
+                for task in self.tasks:
+                    if task.id == "streak_days" and task.is_completed is False:
                         status = await self.web_client.get_daily()
                         if status is True:
                             logger.success(f"{self.session_name} | Successfully get daily reward | "
-                                            f"Days: <m>{days}</m> | Reward coins: {rewards[days - 1]['rewardCoins']}")
+                                            f"Days: <m>{task.days}</m> | Reward coins: {task.rewards_by_days[task.days - 1]}")
                             
-                # UPGRADES
-                if settings.AUTO_UPGRADE is True:
-                    await self.make_upgrades()
-                
                 # TAPPING
                 if settings.AUTO_CLICKER is True:
                     await self.make_taps()
 
                     # APPLY ENERGY BOOST
-                    if settings.APPLY_DAILY_ENERGY is True:
+                    if settings.APPLY_DAILY_ENERGY is True and time() - self.profile.last_energy_boost_time >= 3600:
                         logger.info(f"{self.session_name} | Sleep 5s before checking energy boost")
                         await self.sleep(delay=5)
                         if await self.apply_energy_boost():
                             await self.make_taps()
+                            
+                # UPGRADES
+                if settings.AUTO_UPGRADE is True:
+                    await self.make_upgrades()
 
                 # SLEEP
                 if settings.AUTO_CLICKER is True:
@@ -193,8 +193,8 @@ class Tapper:
                     logger.info(f"{self.session_name} | Sleep {self.preferred_sleep_time}s for earn money for upgrades")
                     await self.sleep(delay=self.preferred_sleep_time)
                 else:
-                    logger.info(f"{self.session_name} | Sleep 200s before next iteration")
-                    await self.sleep(delay=200)
+                    logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
+                    await self.sleep(delay=3600)
                 
                 self.preferred_sleep_time = 0
 

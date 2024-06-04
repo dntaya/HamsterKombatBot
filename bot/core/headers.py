@@ -13,6 +13,7 @@ headers = {
 
 additional_headers_for_empty_requests = {
     'Accept': '*/*',
+    'Content-Length': "0",
 }
 
 def createAdditionalHeadersForDataRequests(content_length: int) -> dict:
