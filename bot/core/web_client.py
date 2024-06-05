@@ -23,6 +23,7 @@ class Requests(StrEnum):
     LIST_TASKS="https://api.hamsterkombat.io/clicker/list-tasks"
     SYNC="https://api.hamsterkombat.io/clicker/sync"
     CLAIM_DAILY_CIPHER="https://api.hamsterkombat.io/clicker/claim-daily-cipher"
+    CLAIM_DAILY_COMBO="https://api.hamsterkombat.io/clicker/claim-daily-combo"
 
 class WebClient:
     def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
@@ -100,6 +101,10 @@ class WebClient:
     
     async def claim_daily_cipher(self, cipher: str) -> Profile:
         response = await self.make_request(Requests.CLAIM_DAILY_CIPHER, json={'cipher': cipher})
+        return Profile(data=response.get('clickerUser'))
+    
+    async def claim_daily_combo(self) -> Profile:
+        response = await self.make_request(Requests.CLAIM_DAILY_COMBO)
         return Profile(data=response.get('clickerUser'))
 
     async def make_request(self, request: Requests, json: dict = {}) -> dict | None:
