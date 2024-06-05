@@ -11,7 +11,7 @@ from aiohttp_proxy import ProxyConnector
 
 
 from bot.config import settings
-from bot.core.entities import Upgrade, Profile, Boost, Task
+from bot.core.entities import Upgrade, Profile, Boost, Task, Config
 from bot.core.web_client import WebClient
 
 from .headers import headers
@@ -46,6 +46,20 @@ class Tapper:
         logger.info(f"{self.session_name} | Last passive earn: <g>+{self.profile.last_passive_earn}</g> | "
                     f"Earn every hour: <y>{self.profile.earn_per_hour}</y>")
         return True
+
+    async def check_daily_cipher(self, config: Config):
+        if config.daily_cipher.is_claimed:
+            return
+        
+        decoded_cipher = base64.b64decode(f"{config.daily_cipher.cipher[:3]}{config.daily_cipher.cipher[4:]}").decode("utf-8")
+        try:
+            self.profile = await self.web_client.claim_daily_cipher(cipher=decoded_cipher)
+            logger.success(f"{self.session_name} | Successfully get cipher reward | "
+                           f"Cipher: <m>{decoded_cipher}</m> | Reward coins: <g>+{config.daily_cipher.bonus_coins}</g>")
+            await self.sleep(delay=5)
+        except Exception:
+            logger.error(f"{self.session_name} | Error while claiming daily cipher. Tried cipher: {decoded_cipher}")
+            await self.sleep(delay=5)
 
     async def make_upgrades(self):
         while True:
@@ -170,16 +184,7 @@ class Tapper:
 
                 # DAILY CIPHER
                 if config is not None:
-                    if not config.daily_cipher.is_claimed:
-                        decoded_cipher = base64.b64decode(f"{config.daily_cipher.cipher[:3]}{config.daily_cipher.cipher[4:]}").decode("utf-8")
-                        try:
-                            self.profile = await self.web_client.claim_daily_cipher(cipher=decoded_cipher)
-                            logger.success(f"{self.session_name} | Successfully get cipher reward | "
-                                                f"Cipher: <m>{decoded_cipher}</m> | Reward coins: <g>+{config.daily_cipher.bonus_coins}</g>")
-                            await self.sleep(delay=5)
-                        except Exception as error:
-                            logger.error(f"{self.session_name} | Error while claiming daily cipher. Tried cipher: {decoded_cipher}")
-                            await self.sleep(delay=5)
+                    self.check_daily_cipher(config=config)
 
                 # DAILY TASKS
                 for task in self.tasks:
