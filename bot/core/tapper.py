@@ -184,7 +184,7 @@ class Tapper:
 
                 # DAILY CIPHER
                 if config is not None:
-                    self.check_daily_cipher(config=config)
+                    await self.check_daily_cipher(config=config)
 
                 # DAILY TASKS
                 for task in self.tasks:
