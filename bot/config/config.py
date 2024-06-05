@@ -17,5 +17,7 @@ class Settings(BaseSettings):
 
     USE_PROXY_FROM_FILE: bool = False
 
+    MIN_BALANCE: int = 1_000
+
 
 settings = Settings()
