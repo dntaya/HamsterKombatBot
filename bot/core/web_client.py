@@ -7,7 +7,7 @@ from bot.utils import logger
 from bot.utils.client import Client
 from bot.utils.scripts import escape_html
 from bot.core.headers import additional_headers_for_empty_requests, createAdditionalHeadersForDataRequests
-from bot.core.entities import Boost, Upgrade, Profile, Task, ProfileAndUpgrades
+from bot.core.entities import Boost, Upgrade, Profile, Task, ProfileAndUpgrades, Config
 from enum import StrEnum
 
 class Requests(StrEnum):
@@ -22,6 +22,7 @@ class Requests(StrEnum):
     SELECT_EXCHANGE="https://api.hamsterkombat.io/clicker/select-exchange"
     LIST_TASKS="https://api.hamsterkombat.io/clicker/list-tasks"
     SYNC="https://api.hamsterkombat.io/clicker/sync"
+    CLAIM_DAILY_CIPHER="https://api.hamsterkombat.io/clicker/claim-daily-cipher"
 
 class WebClient:
     def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
@@ -55,8 +56,8 @@ class WebClient:
         response = await self.make_request(Requests.SELECT_EXCHANGE, json={'exchangeId': exchange_id})
         return response is not None
 
-    async def get_daily(self):
-        response = await self.make_request(Requests.CHECK_TASK, json={'taskId': "streak_days"})
+    async def check_task(self, task_id: str) -> bool:
+        response = await self.make_request(Requests.CHECK_TASK, json={'taskId': task_id})
         return response is not None
 
     async def apply_boost(self, boost_id: str) -> Profile | None:
@@ -75,9 +76,8 @@ class WebClient:
         response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
         if response is not None:
             profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
-
             return ProfileAndUpgrades(profile=Profile(data=profile_data),
-                                      upgrades=list(map(lambda x: Upgrade(data=x), response.get('upgradesForBuy', []))))
+                                      upgrades=list(map(lambda x: Upgrade(data=x), response.get('found', {}).get('upgradesForBuy', []))))
 
     async def get_boosts(self) -> list[Boost] | None:
         response = await self.make_request(Requests.BOOSTS_FOR_BUY)
@@ -94,28 +94,28 @@ class WebClient:
     async def get_me_telegram(self) -> None:
         await self.make_request(Requests.ME_TELEGRAM)
     
-    async def get_config(self) -> None:
-        await self.make_request(Requests.CONFIG)
+    async def get_config(self) -> Config:
+        response = await self.make_request(Requests.CONFIG)
+        return Config(data=response)
+    
+    async def claim_daily_cipher(self, cipher: str) -> Profile:
+        response = await self.make_request(Requests.CLAIM_DAILY_CIPHER, json={'cipher': cipher})
+        return Profile(data=response.get('clickerUser'))
 
     async def make_request(self, request: Requests, json: dict = {}) -> dict | None:
         response_text = ''
-        try:
-            headers = {}
-            data = json_parser.dumps(json).encode('utf-8')
-            if len(json) == 0:
-                headers = additional_headers_for_empty_requests
-            else:
-                headers = createAdditionalHeadersForDataRequests(content_length=len(data))
+        headers = {}
+        data = json_parser.dumps(json).encode('utf-8')
+        if len(json) == 0:
+            headers = additional_headers_for_empty_requests
+        else:
+            headers = createAdditionalHeadersForDataRequests(content_length=len(data))
 
-            response = await self.http_client.post(url=request.value,
-                                                   headers=headers,
-                                                   data=data if len(json) > 0 else None)
-            response_text = await response.text()
-            if response.status != 422:
-                response.raise_for_status()
+        response = await self.http_client.post(url=request.value,
+                                                headers=headers,
+                                                data=data if len(json) > 0 else None)
+        response_text = await response.text()
+        if response.status != 422:
+            response.raise_for_status()
 
-            return json_parser.loads(response_text)
-        except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error in request: {error} | "
-                         f"Response text: {escape_html(response_text)[:128]}")
-            traceback.print_exc()
+        return json_parser.loads(response_text)

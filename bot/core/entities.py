@@ -100,3 +100,21 @@ class Task:
         self.is_completed = data["isCompleted"]
         self.rewards_by_days = list(map(lambda d: d.get("rewardCoins", 0), data.get("rewardsByDays", [])))
         self.days = data.get("days", 0)
+
+@dataclass
+class DailyCipher:
+    cipher: str
+    bonus_coins: int
+    is_claimed: bool
+
+    def __init__(self, data: dict):
+        self.cipher = data["cipher"]
+        self.bonus_coins = data["bonusCoins"]
+        self.is_claimed = data["isClaimed"]
+
+@dataclass
+class Config:
+    daily_cipher: DailyCipher
+
+    def __init__(self, data: dict):
+        self.daily_cipher = DailyCipher(data=data["dailyCipher"])

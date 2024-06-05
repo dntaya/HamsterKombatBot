@@ -1,11 +1,11 @@
 import asyncio
+import base64
 from time import time
 from random import randint
 import traceback
 from bot.utils import logger
 from bot.utils.client import Client
 from bot.exceptions import InvalidSession
-
 import aiohttp
 from aiohttp_proxy import ProxyConnector
 
@@ -158,7 +158,7 @@ class Tapper:
                     - list-tasks
                 """
                 await self.web_client.get_me_telegram()
-                await self.web_client.get_config()
+                config = await self.web_client.get_config()
                 money_earned = await self.earn_money()
                 if not money_earned:
                     logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
@@ -168,13 +168,27 @@ class Tapper:
                 self.boosts = await self.web_client.get_boosts()
                 self.tasks = await self.web_client.get_tasks()
 
+                # DAILY CIPHER
+                if config is not None:
+                    if not config.daily_cipher.is_claimed:
+                        decoded_cipher = base64.b64decode(f"{config.daily_cipher.cipher[:3]}{config.daily_cipher.cipher[4:]}").decode("utf-8")
+                        try:
+                            self.profile = await self.web_client.claim_daily_cipher(cipher=decoded_cipher)
+                            logger.success(f"{self.session_name} | Successfully get cipher reward | "
+                                                f"Cipher: <m>{decoded_cipher}</m> | Reward coins: <g>+{config.daily_cipher.bonus_coins}</g>")
+                            await self.sleep(delay=5)
+                        except Exception as error:
+                            logger.error(f"{self.session_name} | Error while claiming daily cipher. Tried cipher: {decoded_cipher}")
+                            await self.sleep(delay=5)
+
                 # DAILY TASKS
                 for task in self.tasks:
-                    if task.id == "streak_days" and task.is_completed is False:
-                        status = await self.web_client.get_daily()
-                        if status is True:
-                            logger.success(f"{self.session_name} | Successfully get daily reward | "
-                                            f"Days: <m>{task.days}</m> | Reward coins: {task.rewards_by_days[task.days - 1]}")
+                    if task.is_completed is False:
+                        if task.id == "streak_days":
+                            status = await self.web_client.check_task(task_id="streak_days")
+                            if status is True:
+                                logger.success(f"{self.session_name} | Successfully get daily reward | "
+                                                f"Days: <m>{task.days}</m> | Reward coins: {task.rewards_by_days[task.days - 1]}")
                             
                 # TAPPING
                 if settings.AUTO_CLICKER is True:
@@ -207,7 +221,10 @@ class Tapper:
 
             except InvalidSession as error:
                 raise error
-
+            except aiohttp.ClientResponseError as error:
+                logger.error(f"{self.session_name} | Client response error: {error}")
+                logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
+                await self.sleep(delay=3600)
             except Exception as error:
                 logger.error(f"{self.session_name} | Unknown error: {error}")
                 traceback.print_exc()
