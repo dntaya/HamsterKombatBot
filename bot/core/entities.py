@@ -47,7 +47,6 @@ class Upgrade:
     cooldown_seconds: int
     max_level: int
     condition: str
-    significance: float
 
     def __init__(self, data: dict):
         self.id = data["id"]
@@ -60,7 +59,9 @@ class Upgrade:
         self.cooldown_seconds = data.get("cooldownSeconds", 0)
         self.max_level = data.get("maxLevel", data["level"])
         self.condition = data.get("condition")
-        self.significance = self.earn_per_hour / self.price if self.price > 0 else 0
+
+    def calculate_significance(self, user_earn_per_hour: float) -> float:
+        return self.price / user_earn_per_hour + self.price / (user_earn_per_hour + self.earn_per_hour)
     
     def can_upgrade(self) -> bool:
         return self.is_available \

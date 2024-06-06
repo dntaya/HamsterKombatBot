@@ -69,7 +69,7 @@ class Tapper:
             if not settings.WAIT_FOR_MOST_PROFIT_UPGRADES:
                 available_upgrades = filter(lambda u: self.profile.balance - settings.MIN_BALANCE > u.price and u.cooldown_seconds == 0, available_upgrades)
 
-            available_upgrades = sorted(available_upgrades, key=lambda u: u.significance, reverse=True)
+            available_upgrades = sorted(available_upgrades, key=lambda u: u.calculate_significance(user_earn_per_hour=self.profile.earn_per_hour), reverse=True)
 
             if len(available_upgrades) == 0:
                 logger.info(f"{self.session_name} | No available upgrades")
