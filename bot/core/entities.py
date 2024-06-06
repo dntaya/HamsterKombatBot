@@ -60,8 +60,8 @@ class Upgrade:
         self.max_level = data.get("maxLevel", data["level"])
         self.condition = data.get("condition")
 
-    def calculate_significance(self, user_earn_per_hour: float) -> float:
-        return self.price / user_earn_per_hour + self.price / (user_earn_per_hour + self.earn_per_hour)
+    def calculate_significance(self) -> float:
+        return self.price / self.earn_per_hour + self.cooldown_seconds / 3600
     
     def can_upgrade(self) -> bool:
         return self.is_available \
