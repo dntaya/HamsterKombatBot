@@ -37,6 +37,10 @@ async def add_client(client: Client) -> None:
 
 
 async def register_client_by_tg_auth() -> None:
+    if not settings.API_ID or not settings.API_HASH:
+        logger.error('API_ID or API_HASH is not set in the .env file')
+        return None
+
     client_name = input('\nEnter the client name (press Enter to exit): ')
 
     if not client_name:
