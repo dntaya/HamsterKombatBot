@@ -1,13 +1,11 @@
 import aiohttp
-import traceback
 import json as json_parser
 from time import time
 from better_proxy import Proxy
 from bot.utils import logger
 from bot.utils.client import Client
-from bot.utils.scripts import escape_html
 from bot.core.headers import additional_headers_for_empty_requests, createAdditionalHeadersForDataRequests
-from bot.core.entities import Boost, Upgrade, Profile, Task, ProfileAndUpgrades, Config
+from bot.core.entities import Boost, Upgrade, Profile, Task, DailyCombo, Config
 from enum import StrEnum
 
 class Requests(StrEnum):
@@ -68,17 +66,21 @@ class WebClient:
 
             return Profile(data=profile_data)
 
-    async def get_upgrades(self) -> list[Upgrade] | None:
+    async def get_upgrades(self) -> tuple[list[Upgrade], DailyCombo]:
         response = await self.make_request(Requests.UPGRADES_FOR_BUY)
         if response is not None:
-            return list(map(lambda x: Upgrade(data=x), response['upgradesForBuy']))
+            return list(map(lambda x: Upgrade(data=x), response['upgradesForBuy'])), \
+                DailyCombo(data=response.get('dailyCombo', {}))
 
-    async def buy_upgrade(self, upgrade_id: str) -> ProfileAndUpgrades | None:
+    async def buy_upgrade(self, upgrade_id: str) -> tuple[Profile, list[Upgrade], DailyCombo]:
         response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
         if response is not None:
-            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
-            return ProfileAndUpgrades(profile=Profile(data=profile_data),
-                                      upgrades=list(map(lambda x: Upgrade(data=x), response.get('found', {}).get('upgradesForBuy', []))))
+            if response['found'] is not None:
+                response = response['found']
+            profile_data = response.get('clickerUser')
+            return Profile(data=profile_data), \
+                list(map(lambda x: Upgrade(data=x), response.get('upgradesForBuy', []))), \
+                DailyCombo(data=response.get('dailyCombo', {}))
 
     async def get_boosts(self) -> list[Boost] | None:
         response = await self.make_request(Requests.BOOSTS_FOR_BUY)

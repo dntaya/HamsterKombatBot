@@ -70,12 +70,6 @@ class Upgrade:
             and self.max_level >= self.level \
             and (self.condition is None or self.condition.get("_type") != "SubscribeTelegramChannel")
 
-
-@dataclass
-class ProfileAndUpgrades:
-    profile: Profile
-    upgrades: list[Upgrade]
-
 @dataclass
 class Boost:
     id: str
@@ -101,6 +95,19 @@ class Task:
         self.is_completed = data["isCompleted"]
         self.reward_coins = data.get("rewardCoins", 0)
         self.days = data.get("days", 0)
+
+@dataclass
+class DailyCombo:
+    bonus_coins: int
+    is_claimed: bool
+    remain_seconds: int
+    upgrade_ids: list[str]
+
+    def __init__(self, data: dict):
+        self.bonus_coins = data["bonusCoins"]
+        self.is_claimed = data["isClaimed"]
+        self.remain_seconds = data["remainSeconds"]
+        self.upgrade_ids = data["upgradeIds"]
 
 @dataclass
 class DailyCipher:

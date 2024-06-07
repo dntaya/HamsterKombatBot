@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from datetime import datetime, timedelta, timezone
 from time import time
 from random import randint
 import traceback
@@ -91,24 +92,22 @@ class Tapper:
             logger.info(f"{self.session_name} | Sleep {sleep_time}s before upgrade <e>{most_profit_upgrade.name}</e>")
             await self.sleep(delay=sleep_time)
 
-            profile_and_upgrades = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
-            if profile_and_upgrades is not None:
-                self.profile = profile_and_upgrades.profile
+            self.profile, upgrades, daily_combo = await self.web_client.buy_upgrade(upgrade_id=most_profit_upgrade.id)
 
-                logger.success(
-                    f"{self.session_name} | "
-                    f"Successfully upgraded <e>{most_profit_upgrade.name}</e> to <m>{most_profit_upgrade.level}</m> lvl | "
-                    f"Earn every hour: <y>{self.profile.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
+            logger.success(
+                f"{self.session_name} | "
+                f"Successfully upgraded <e>{most_profit_upgrade.name}</e> to <m>{most_profit_upgrade.level}</m> lvl | "
+                f"Earn every hour: <y>{self.profile.earn_per_hour}</y> (<g>+{most_profit_upgrade.earn_per_hour}</g>)")
 
-                if len(profile_and_upgrades.upgrades) == 0:
-                    logger.error(f"{self.session_name} | No upgrades in response")
-                    break
-                else:
-                    self.upgrades = profile_and_upgrades.upgrades
-
-                await self.sleep(delay=1)
-            else:
+            if len(upgrades) == 0:
+                logger.error(f"{self.session_name} | No upgrades in response")
                 break
+            else:
+                self.upgrades = upgrades
+
+            # TODO: claim daily combo if it was completed
+
+            await self.sleep(delay=1)
 
     async def apply_energy_boost(self) -> bool:
         energy_boost = next((boost for boost in self.boosts if boost.id == 'BoostFullAvailableTaps'), {})
@@ -178,9 +177,13 @@ class Tapper:
                     logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
                     await self.sleep(delay=3600)
                     continue
-                self.upgrades = await self.web_client.get_upgrades()
+                self.upgrades, daily_combo = await self.web_client.get_upgrades()
                 self.boosts = await self.web_client.get_boosts()
                 self.tasks = await self.web_client.get_tasks()
+
+                
+                # DAILY COMBO CHECKING
+
 
                 # DAILY CIPHER
                 if config is not None:
@@ -253,3 +256,10 @@ async def run_tapper(client: Client, proxy: str | None):
             await Tapper(web_client=web_client).run()
     except InvalidSession:
         logger.error(f"{client.name} | Invalid Session")
+
+async def fetch_daily_combo() -> list[str]:
+    async with aiohttp.ClientSession() as http_client:
+        response = await http_client.get(url='https://anisovaleksey.github.io/HamsterKombatBot/daily_combo.json')
+        response_json = await response.json()
+        combo = response_json.get('combo')
+        datetime.strptime(response_json.get('date'), "%Y-%m-%d").astimezone(timezone(timedelta(hours=7))).timestamp()
