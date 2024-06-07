@@ -186,14 +186,22 @@ class Tapper:
                 if config is not None:
                     await self.check_daily_cipher(config=config)
 
-                # DAILY TASKS
+                # TASKS COMPLETING
                 for task in self.tasks:
                     if task.is_completed is False:
+                        if task.id == "invite_friends":
+                            continue
+                        status = await self.web_client.check_task(task_id=task.id)
+                        if status is False:
+                            continue
+                        
+                        self.profile.balance += task.reward_coins
                         if task.id == "streak_days":
-                            status = await self.web_client.check_task(task_id="streak_days")
-                            if status is True:
-                                logger.success(f"{self.session_name} | Successfully get daily reward | "
-                                                f"Days: <m>{task.days}</m> | Reward coins: {task.rewards_by_days[task.days - 1]}")
+                            logger.success(f"{self.session_name} | Successfully get daily reward | "
+                                           f"Days: <m>{task.days}</m> | Balance: <c>{self.profile.balance}</c> (<g>+{task.reward_coins}</g>)")
+                        else:
+                            logger.success(f"{self.session_name} | Successfully get reward for task <m>{task.id}</m> | "
+                                           f"Balance: <c>{self.profile.balance}</c> (<g>+{task.reward_coins}</g>)")
                             
                 # TAPPING
                 if settings.AUTO_CLICKER is True:

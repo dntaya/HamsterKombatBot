@@ -93,13 +93,13 @@ class Boost:
 class Task:
     id: str
     is_completed: bool
-    rewards_by_days: list[int]
+    reward_coins: int
     days: int
 
     def __init__(self, data: dict):
         self.id = data["id"]
         self.is_completed = data["isCompleted"]
-        self.rewards_by_days = list(map(lambda d: d.get("rewardCoins", 0), data.get("rewardsByDays", [])))
+        self.reward_coins = data.get("rewardCoins", 0)
         self.days = data.get("days", 0)
 
 @dataclass
