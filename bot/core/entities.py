@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from time import time
+from bot.config.config import settings
 
 
 @dataclass
@@ -34,6 +35,9 @@ class Profile:
 
     def getAvailableTaps(self):
         return int(float(self.available_energy) / self.earn_per_tap)
+    
+    def getSpendingBalance(self):
+        return self.balance - settings.MIN_BALANCE
     
 @dataclass
 class Upgrade:
