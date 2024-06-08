@@ -26,7 +26,7 @@ class Tapper:
         self.upgrades: list[Upgrade] = []
         self.boosts: list[Boost] = []
         self.tasks: list[Task] = []
-        self.daily_combo = list[DailyCombo] = []
+        self.daily_combo: list[DailyCombo] = []
         self.preferred_sleep_time = 0
         
     def update_profile_params(self, data: dict) -> None:
