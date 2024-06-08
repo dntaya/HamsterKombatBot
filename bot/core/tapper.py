@@ -71,7 +71,7 @@ class Tapper:
                                f"Reward coins: <g>+{self.daily_combo.bonus_coins}</g>")
                 await self.sleep(delay=5)
 
-            combo = fetch_daily_combo()
+            combo = await fetch_daily_combo()
             if len(combo) == 0:
                 logger.info(f"{self.session_name} | Daily combo not published")
                 return False
