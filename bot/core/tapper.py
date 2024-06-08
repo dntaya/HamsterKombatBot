@@ -91,7 +91,7 @@ class Tapper:
             
 
     async def make_upgrades(self):
-        wait_for_combo_upgrades = self.check_daily_combo()
+        wait_for_combo_upgrades = await self.check_daily_combo()
         if wait_for_combo_upgrades:
             return
 
