@@ -26,7 +26,7 @@ class Tapper:
         self.upgrades: list[Upgrade] = []
         self.boosts: list[Boost] = []
         self.tasks: list[Task] = []
-        self.daily_combo: list[DailyCombo] = []
+        self.daily_combo: DailyCombo = []
         self.preferred_sleep_time = 0
         
     def update_profile_params(self, data: dict) -> None:
@@ -75,7 +75,7 @@ class Tapper:
             if len(combo) == 0:
                 logger.info(f"{self.session_name} | Daily combo not published")
                 return False
-            combo_upgrades: list[Upgrade] = list(filter(lambda u: u.id in combo, self.upgrades))
+            combo_upgrades: list[Upgrade] = list(filter(lambda u: u.id in combo and not u.id in self.daily_combo.upgrade_ids, self.upgrades))
 
             for upgrade in combo_upgrades:
                 if not upgrade.can_upgrade():
