@@ -103,10 +103,14 @@ class WebClient:
     
     async def claim_daily_cipher(self, cipher: str) -> Profile:
         response = await self.make_request(Requests.CLAIM_DAILY_CIPHER, json={'cipher': cipher})
+        if 'found' in response:
+            response = response['found']
         return Profile(data=response.get('clickerUser'))
     
     async def claim_daily_combo(self) -> Profile:
         response = await self.make_request(Requests.CLAIM_DAILY_COMBO)
+        if 'found' in response:
+            response = response['found']
         return Profile(data=response.get('clickerUser'))
 
     async def make_request(self, request: Requests, json: dict = {}) -> dict | None:
