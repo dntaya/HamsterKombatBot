@@ -65,11 +65,9 @@ class Tapper:
 
     async def check_daily_combo(self):
         if not self.daily_combo.is_claimed:
-            if len(self.daily_combo.upgrade_ids) == 3:
-                self.profile = await self.web_client.claim_daily_combo()
-                logger.success(f"{self.session_name} | Successfully get daily combo reward | "
-                               f"Reward coins: <g>+{self.daily_combo.bonus_coins}</g>")
-                await self.sleep(delay=5)
+            reward_claimed = await self.try_claim_daily_combo()
+            if reward_claimed:
+                return False
 
             combo = await fetch_daily_combo()
             if len(combo) == 0:
@@ -89,6 +87,18 @@ class Tapper:
 
                 await self.do_upgrade(upgrade=upgrade)
             
+            await self.try_claim_daily_combo()
+        return False
+            
+    async def try_claim_daily_combo(self) -> bool:
+        if len(self.daily_combo.upgrade_ids) != 3:
+            return False
+        self.profile = await self.web_client.claim_daily_combo()
+        logger.success(f"{self.session_name} | Successfully get daily combo reward | "
+                       f"Reward coins: <g>+{self.daily_combo.bonus_coins}</g>")
+        await self.sleep(delay=5)
+        return True
+
 
     async def make_upgrades(self):
         wait_for_combo_upgrades = await self.check_daily_combo()
