@@ -19,5 +19,7 @@ class Settings(BaseSettings):
 
     MIN_BALANCE: int = 1_000
 
+    SLEEP_INTERVAL_BEFORE_UPGRADE: list[int] = [10, 40]
+
 
 settings = Settings()

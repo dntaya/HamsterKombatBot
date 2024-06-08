@@ -88,7 +88,7 @@ class Tapper:
                 self.preferred_sleep_time = most_profit_upgrade.cooldown_seconds + 2
                 break
 
-            sleep_time = randint(10, 40)
+            sleep_time = randint(settings.SLEEP_INTERVAL_BEFORE_UPGRADE[0], settings.SLEEP_INTERVAL_BEFORE_UPGRADE[1])
             logger.info(f"{self.session_name} | Sleep {sleep_time}s before upgrade <e>{most_profit_upgrade.name}</e>")
             await self.sleep(delay=sleep_time)
 

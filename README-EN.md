@@ -24,6 +24,7 @@
 | **WAIT_FOR_MOST_PROFIT_UPGRADES**     | Save money for the most profitable upgrade                                               |
 | **APPLY_DAILY_ENERGY**                | Whether to use the daily free energy boost _(True / False)_                              |
 | **MIN_BALANCE**                       | Minimal balance that always will be availble                                             |
+| **SLEEP_INTERVAL_BEFORE_UPGRADE**     | Sleep before every upgrade. _default: [10, 40]_                                          |
 | **USE_PROXY_FROM_FILE**               | Whether to use proxy from the `bot/config/proxies.txt` file (True / False)               |
 
 ## Quick Start 📚
