@@ -75,7 +75,7 @@ class WebClient:
     async def buy_upgrade(self, upgrade_id: str) -> tuple[Profile, list[Upgrade], DailyCombo]:
         response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
         if response is not None:
-            if response['found'] is not None:
+            if 'found' in response:
                 response = response['found']
             profile_data = response.get('clickerUser')
             return Profile(data=profile_data), \
