@@ -70,6 +70,8 @@ class Upgrade:
     def calculate_significance(self, profile: Profile) -> float:
         if self.price == 0:
             return 0
+        if profile.earn_per_hour == 0:
+            return self.price / self.earn_per_hour
         return self.price / self.earn_per_hour \
             + self.cooldown_seconds / 3600 \
             + max((self.price - profile.getSpendingBalance()) / profile.earn_per_hour, 0) 
