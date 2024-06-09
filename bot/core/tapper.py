@@ -256,7 +256,6 @@ class Tapper:
 
                 # SLEEP
                 if self.preferred_sleep is not None:
-                    print(time() - self.preferred_sleep.created_time)
                     sleep_time=max(self.preferred_sleep.delay - (time() - self.preferred_sleep.created_time), 40)
                     if self.preferred_sleep.sleep_reason == SleepReason.WAIT_UPGRADE_MONEY:
                         logger.info(f"{self.session_name} | Sleep {sleep_time}s for earn money for upgrades")
