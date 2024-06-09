@@ -50,6 +50,7 @@ class Upgrade:
     is_expired: bool
     cooldown_seconds: int
     max_level: int
+    welcome_coins: int
     condition: str
 
     def __init__(self, data: dict):
@@ -62,17 +63,21 @@ class Upgrade:
         self.is_expired = data["isExpired"]
         self.cooldown_seconds = data.get("cooldownSeconds", 0)
         self.max_level = data.get("maxLevel", data["level"])
+        self.welcome_coins = data.get("welcomeCoins", 0)
         self.condition = data.get("condition")
 
-    def calculate_significance(self) -> float:
-        return self.price / self.earn_per_hour + self.cooldown_seconds / 3600
+    def calculate_significance(self, profile: Profile) -> float:
+        if self.price == 0:
+            return 0
+        return self.price / self.earn_per_hour \
+            + self.cooldown_seconds / 3600 \
+            + max((self.price - profile.getSpendingBalance()) / profile.earn_per_hour, 0) 
     
     def can_upgrade(self) -> bool:
         return self.is_available \
             and not self.is_expired \
-            and self.earn_per_hour != 0 \
+            and (self.earn_per_hour != 0 or self.welcome_coins != 0) \
             and self.max_level >= self.level \
-            and (self.condition is None or self.condition.get("_type") != "SubscribeTelegramChannel")
 
 @dataclass
 class Boost:
