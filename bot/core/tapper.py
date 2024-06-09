@@ -297,11 +297,11 @@ async def fetch_daily_combo() -> list[str]:
         response = await http_client.get(url='https://anisovaleksey.github.io/HamsterKombatBot/daily_combo.json')
         response_json = await response.json()
         combo = response_json.get('combo')
-        start_combo_date = datetime.strptime(response_json.get('date'), "%Y-%m-%d").astimezone(timezone(timedelta(hours=7))).replace(hour=19)
+        start_combo_date = datetime.strptime(response_json.get('date'), "%Y-%m-%d").replace(tzinfo=timezone.utc).replace(hour=12)
         end_combo_date = start_combo_date + timedelta(days=1)
-        curerent_date = datetime.now(UTC).astimezone(timezone(timedelta(hours=7)))
+        current_timestamp = time()
         
-        if start_combo_date.timestamp() < curerent_date.timestamp() and curerent_date.timestamp() < end_combo_date.timestamp():
+        if start_combo_date.timestamp() < current_timestamp and current_timestamp < end_combo_date.timestamp():
             return combo
         else:
             return []
