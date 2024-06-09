@@ -32,9 +32,14 @@ class Tapper:
     def update_profile_params(self, data: dict) -> None:
         self.profile = Profile(data=data)
 
-    async def earn_money(self) -> bool:
+    async def earn_money(self):
         profile = await self.web_client.get_profile_data()
 
+
+        if not profile:
+            return False
+        
+        
         if not profile:
             return False
         
@@ -47,7 +52,6 @@ class Tapper:
 
         logger.info(f"{self.session_name} | Last passive earn: <g>+{self.profile.last_passive_earn}</g> | "
                     f"Earn every hour: <y>{self.profile.earn_per_hour}</y>")
-        return True
 
     async def check_daily_cipher(self, config: Config):
         if config.daily_cipher.is_claimed:
@@ -111,7 +115,7 @@ class Tapper:
             if not settings.WAIT_FOR_MOST_PROFIT_UPGRADES:
                 available_upgrades = filter(lambda u: self.profile.getSpendingBalance() > u.price and u.cooldown_seconds == 0, available_upgrades)
 
-            available_upgrades = sorted(available_upgrades, key=lambda u: u.calculate_significance(), reverse=False)
+            available_upgrades = sorted(available_upgrades, key=lambda u: u.calculate_significance(self.profile), reverse=False)
 
             if len(available_upgrades) == 0:
                 logger.info(f"{self.session_name} | No available upgrades")
@@ -205,21 +209,12 @@ class Tapper:
                     - boosts-for-buy
                     - list-tasks
                 """
-                await fetch_daily_combo()
                 await self.web_client.get_me_telegram()
                 config = await self.web_client.get_config()
-                money_earned = await self.earn_money()
-                if not money_earned:
-                    logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
-                    await self.sleep(delay=3600)
-                    continue
+                await self.earn_money()
                 self.upgrades, self.daily_combo = await self.web_client.get_upgrades()
                 self.boosts = await self.web_client.get_boosts()
                 self.tasks = await self.web_client.get_tasks()
-
-                
-                # DAILY COMBO CHECKING
-
 
                 # DAILY CIPHER
                 if config is not None:
@@ -258,16 +253,25 @@ class Tapper:
                     await self.make_upgrades()
 
                 # SLEEP
+                sleep_time_to_recover_energy = (self.profile.max_energy - self.profile.available_energy) / self.profile.energy_recover_per_sec
+
                 if settings.AUTO_CLICKER is True:
-                    sleep_time_to_recover_energy = (self.profile.max_energy - self.profile.available_energy) / self.profile.energy_recover_per_sec
-                    logger.info(f"{self.session_name} | Sleep {sleep_time_to_recover_energy}s for recover full energy")
-                    await self.sleep(delay=sleep_time_to_recover_energy)
-                elif self.preferred_sleep_time > 60:
-                    logger.info(f"{self.session_name} | Sleep {self.preferred_sleep_time}s for earn money for upgrades")
-                    await self.sleep(delay=self.preferred_sleep_time)
+                    if self.preferred_sleep_time != 0 and self.preferred_sleep_time < sleep_time_to_recover_energy:
+                        logger.info(f"{self.session_name} | Sleep {self.preferred_sleep_time}s for earn money for upgrades")
+                        await self.sleep(delay=self.preferred_sleep_time)
+                    elif sleep_time_to_recover_energy > 0:
+                        logger.info(f"{self.session_name} | Sleep {sleep_time_to_recover_energy}s for recover full energy")
+                        await self.sleep(delay=sleep_time_to_recover_energy)
+                    else:
+                        logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
+                        await self.sleep(delay=3600)
                 else:
-                    logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
-                    await self.sleep(delay=3600)
+                    if self.preferred_sleep_time != 0:
+                        logger.info(f"{self.session_name} | Sleep {self.preferred_sleep_time}s for earn money for upgrades")
+                        await self.sleep(delay=self.preferred_sleep_time)
+                    else:
+                        logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
+                        await self.sleep(delay=3600)
                 
                 self.preferred_sleep_time = 0
 
@@ -275,7 +279,7 @@ class Tapper:
                 raise error
             except aiohttp.ClientResponseError as error:
                 logger.error(f"{self.session_name} | Client response error: {error}")
-                logger.info(f"{self.session_name} | Sleep 3600s before next iteration")
+                logger.info(f"{self.session_name} | Sleep 3600s before next iteration because of error")
                 await self.sleep(delay=3600)
             except Exception as error:
                 logger.error(f"{self.session_name} | Unknown error: {error}")
