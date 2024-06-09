@@ -5,7 +5,7 @@ import os
 import asyncio
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw.functions.messages import RequestWebView
-from bot.exceptions import InvalidSession
+from ..exceptions import InvalidSession
 from pyrogram import Client as TgClient
 from urllib.parse import unquote
 from bot.utils.fingerprint import FINGERPRINT
@@ -60,7 +60,7 @@ async def register_client_by_tg_auth() -> None:
         logger.error(f"Unknown error while getting Access Token: {error}")
 
 
-async def get_tg_web_data(client_name) -> str:
+async def get_tg_web_data(client_name) -> str | None:
     tg_client = TgClient(
         name=client_name,
         api_id=settings.API_ID,
@@ -85,7 +85,7 @@ async def get_tg_web_data(client_name) -> str:
             try:
                 peer = await tg_client.resolve_peer('hamster_kombat_bot')
                 break
-            except FloodWait as fl:
+            except FloodWait:
                 return None
 
         web_view = await tg_client.invoke(RequestWebView(

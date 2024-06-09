@@ -29,9 +29,9 @@ class Tapper:
         self.daily_combo: DailyCombo = []
         self.preferred_sleep: Sleep | None = None
         
-    def update_preferred_sleep(self, sleep: Sleep):
-        if self.preferred_sleep is None or sleep.delay < self.preferred_sleep.delay:
-            self.preferred_sleep = sleep
+    def update_preferred_sleep(self, delay: int, sleep_reason: SleepReason):
+        if self.preferred_sleep is None or delay < self.preferred_sleep.delay:
+            self.preferred_sleep = Sleep(delay=delay, sleep_reason=sleep_reason, created_time=time())
 
     async def earn_money(self):
         profile = await self.web_client.get_profile_data()
@@ -79,10 +79,10 @@ class Tapper:
             for upgrade in combo_upgrades:
                 if upgrade.price > self.profile.getSpendingBalance():
                     logger.info(f"{self.session_name} | Not enough money for upgrade <e>{upgrade.name}</e>")
-                    self.update_preferred_sleep(Sleep(
+                    self.update_preferred_sleep(
                         delay=int((upgrade.price - self.profile.getSpendingBalance()) / self.profile.earn_per_sec),
                         sleep_reason=SleepReason.WAIT_UPGRADE_MONEY
-                    ))
+                    )
                     return True
 
                 await self.do_upgrade(upgrade=upgrade)
@@ -121,18 +121,18 @@ class Tapper:
 
             if most_profit_upgrade.price > self.profile.getSpendingBalance():
                 logger.info(f"{self.session_name} | Not enough money for upgrade <e>{most_profit_upgrade.name}</e>")
-                self.update_preferred_sleep(Sleep(
+                self.update_preferred_sleep(
                     delay=int((most_profit_upgrade.price - self.profile.getSpendingBalance()) / self.profile.earn_per_sec),
                     sleep_reason=SleepReason.WAIT_UPGRADE_MONEY
-                ))
+                )
                 break
 
             if most_profit_upgrade.cooldown_seconds > 0:
-                logger.info(f"{self.session_name} | Upgrade <e>{most_profit_upgrade.name}</e> on cooldown")
-                self.update_preferred_sleep(Sleep(
+                logger.info(f"{self.session_name} | Upgrade <e>{most_profit_upgrade.name}</e> on cooldown for <y>{most_profit_upgrade.cooldown_seconds}s</y>")
+                self.update_preferred_sleep(
                     delay=most_profit_upgrade.cooldown_seconds,
                     sleep_reason=SleepReason.WAIT_UPGRADE_COOLDOWN
-                ))
+                )
                 break
 
             await self.do_upgrade(upgrade=most_profit_upgrade)
@@ -245,10 +245,10 @@ class Tapper:
                         if await self.apply_energy_boost():
                             await self.make_taps()
                     
-                    self.update_preferred_sleep(Sleep(
+                    self.update_preferred_sleep(
                         delay=(self.profile.max_energy - self.profile.available_energy) / self.profile.energy_recover_per_sec,
                         sleep_reason=SleepReason.WAIT_ENERGY_RECOVER
-                    ))
+                    )
                             
                 # UPGRADES
                 if settings.AUTO_UPGRADE is True:
@@ -256,6 +256,7 @@ class Tapper:
 
                 # SLEEP
                 if self.preferred_sleep is not None:
+                    print(time() - self.preferred_sleep.created_time)
                     sleep_time=max(self.preferred_sleep.delay - (time() - self.preferred_sleep.created_time), 40)
                     if self.preferred_sleep.sleep_reason == SleepReason.WAIT_UPGRADE_MONEY:
                         logger.info(f"{self.session_name} | Sleep {sleep_time}s for earn money for upgrades")

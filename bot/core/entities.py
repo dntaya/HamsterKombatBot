@@ -146,4 +146,4 @@ class SleepReason(Enum):
 class Sleep:
     delay: int
     sleep_reason: SleepReason
-    created_time: int = time()
+    created_time: int
