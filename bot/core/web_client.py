@@ -22,6 +22,7 @@ class Requests(StrEnum):
     SYNC="https://api.hamsterkombat.io/clicker/sync"
     CLAIM_DAILY_CIPHER="https://api.hamsterkombat.io/clicker/claim-daily-cipher"
     CLAIM_DAILY_COMBO="https://api.hamsterkombat.io/clicker/claim-daily-combo"
+    REFERRAL_STAT="https://api.hamsterkombat.io/clicker/referral-stat"
 
 class WebClient:
     def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
@@ -38,61 +39,53 @@ class WebClient:
         except Exception as error:
             logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
 
-    async def get_profile_data(self) -> Profile | None:
+    async def get_profile_data(self) -> Profile:
         response = await self.make_request(Requests.SYNC)
-        if response is not None:
-            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
-            return Profile(data=profile_data)
+        profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+        return Profile(data=profile_data)
 
     async def get_tasks(self) -> list[Task]:
         response = await self.make_request(Requests.LIST_TASKS)
-        if response is not None:
-            return list(map(lambda d: Task(data=d), response['tasks']))
-        else:
-            return []
+        return list(map(lambda d: Task(data=d), response['tasks']))
 
     async def select_exchange(self, exchange_id: str) -> bool:
-        response = await self.make_request(Requests.SELECT_EXCHANGE, json={'exchangeId': exchange_id})
-        return response is not None
+        await self.make_request(Requests.SELECT_EXCHANGE, json={'exchangeId': exchange_id})
+        return True 
 
     async def check_task(self, task_id: str) -> bool:
         response = await self.make_request(Requests.CHECK_TASK, json={'taskId': task_id})
-        return response is not None
+        print(json_parser.dumps(response, indent=4))
+        return True
 
-    async def apply_boost(self, boost_id: str) -> Profile | None:
+    async def apply_boost(self, boost_id: str) -> Profile:
         response = await self.make_request(Requests.BUY_BOOST, json={'timestamp': time(), 'boostId': boost_id})
-        if response is not None:
-            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+        profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
 
-            return Profile(data=profile_data)
+        return Profile(data=profile_data)
 
     async def get_upgrades(self) -> tuple[list[Upgrade], DailyCombo]:
         response = await self.make_request(Requests.UPGRADES_FOR_BUY)
-        if response is not None:
-            return list(map(lambda x: Upgrade(data=x), response['upgradesForBuy'])), \
-                DailyCombo(data=response.get('dailyCombo', {}))
+        return list(map(lambda x: Upgrade(data=x), response['upgradesForBuy'])), \
+            DailyCombo(data=response.get('dailyCombo', {}))
 
     async def buy_upgrade(self, upgrade_id: str) -> tuple[Profile, list[Upgrade], DailyCombo]:
         response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
-        if response is not None:
-            if 'found' in response:
-                response = response['found']
-            profile_data = response.get('clickerUser')
-            return Profile(data=profile_data), \
-                list(map(lambda x: Upgrade(data=x), response.get('upgradesForBuy', []))), \
-                DailyCombo(data=response.get('dailyCombo', {}))
+        if 'found' in response:
+            response = response['found']
+        profile_data = response.get('clickerUser')
+        return Profile(data=profile_data), \
+            list(map(lambda x: Upgrade(data=x), response.get('upgradesForBuy', []))), \
+            DailyCombo(data=response.get('dailyCombo', {}))
 
-    async def get_boosts(self) -> list[Boost] | None:
+    async def get_boosts(self) -> list[Boost]:
         response = await self.make_request(Requests.BOOSTS_FOR_BUY)
-        if response is not None:
-            return list(map(lambda x: Boost(data=x), response['boostsForBuy']))
+        return list(map(lambda x: Boost(data=x), response['boostsForBuy']))
 
-    async def send_taps(self, available_energy: int, taps: int) -> Profile | None:
+    async def send_taps(self, available_energy: int, taps: int) -> Profile:
         response = await self.make_request(Requests.TAP, json={'availableTaps': available_energy, 'count': taps, 'timestamp': time()})
-        if response is not None:
-            profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+        profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
 
-            return Profile(data=profile_data)
+        return Profile(data=profile_data)
         
     async def get_me_telegram(self) -> None:
         await self.make_request(Requests.ME_TELEGRAM)
@@ -112,8 +105,14 @@ class WebClient:
         if 'found' in response:
             response = response['found']
         return Profile(data=response.get('clickerUser'))
+    
+    async def get_referrals_count(self) -> int:
+        response = await self.make_request(Requests.REFERRAL_STAT, json={'offset': 0})
+        if 'found' in response:
+            response = response['found']
+        return response.get('count', 0)
 
-    async def make_request(self, request: Requests, json: dict = {}) -> dict | None:
+    async def make_request(self, request: Requests, json: dict = {}) -> dict:
         response_text = ''
         headers = {}
         data = json_parser.dumps(json).encode('utf-8')
