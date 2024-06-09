@@ -47,7 +47,7 @@ async def register_client_by_tg_auth() -> None:
         return None
 
     try:
-        tg_web_data = await get_tg_web_data()
+        tg_web_data = await get_tg_web_data(client_name)
 
         response = requests.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
                                             json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
@@ -60,8 +60,9 @@ async def register_client_by_tg_auth() -> None:
         logger.error(f"Unknown error while getting Access Token: {error}")
 
 
-async def get_tg_web_data() -> str:
+async def get_tg_web_data(client_name) -> str:
     tg_client = TgClient(
+        name=client_name
         api_id=settings.API_ID,
         api_hash=settings.API_HASH
     )
