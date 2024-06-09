@@ -53,8 +53,8 @@ class WebClient:
         return True 
 
     async def check_task(self, task_id: str) -> bool:
-        await self.make_request(Requests.CHECK_TASK, json={'taskId': task_id})
-        return True
+        response = await self.make_request(Requests.CHECK_TASK, json={'taskId': task_id})
+        return response.get('task', {}).get('isCompleted', False)
 
     async def apply_boost(self, boost_id: str) -> Profile:
         response = await self.make_request(Requests.BUY_BOOST, json={'timestamp': time(), 'boostId': boost_id})
