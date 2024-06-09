@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     MIN_BALANCE: int = 1_000
 
+    MIN_TAPS_FOR_CLICKER_IN_PERCENT: int = 60
+
     SLEEP_INTERVAL_BEFORE_UPGRADE: list[int] = [10, 40]
 
 

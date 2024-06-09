@@ -166,6 +166,12 @@ class Tapper:
         if available_taps < self.profile.earn_per_tap:
             logger.info(f"{self.session_name} | Not enough taps: {available_taps}/{self.profile.earn_per_tap}")
             return True
+        
+        max_taps = int(float(self.profile.max_energy) / self.profile.earn_per_tap)
+        taps_to_start = max_taps * settings.MIN_TAPS_FOR_CLICKER_IN_PERCENT / 100
+        if available_taps < taps_to_start:
+            logger.info(f"{self.session_name} | Not enough taps for launch clicker: {available_taps}/{taps_to_start}")
+            return True
 
         seconds_from_last_update = int(time() - self.profile.update_time)
         energy_recovered = self.profile.energy_recover_per_sec * seconds_from_last_update

@@ -1,6 +1,3 @@
-[<img src="https://img.shields.io/badge/Telegram-%40Me-orange">](https://t.me/sho6ot)
-
-
 ![img1](.github/images/demo.png)
 
 > 🇷🇺 README на русском доступен [здесь](README.md)
@@ -11,21 +8,20 @@
 | Multithreading                                                 |     ✅     |
 | Binding a proxy to a session                                   |     ✅     |
 | Auto-purchase of items if you have coins (tap, energy, charge) |     ✅     |
-| Random sleep time between clicks                               |     ✅     |
-| Random number of clicks per request                            |     ✅     |
 | Support tdata / pyrogram .session / telethon .session          |     ✅     |
 
 ## [Settings](https://github.com/shamhi/HamsterKombatBot/blob/main/.env-example)
-| Setting name                          | Description                                                                              |
-|---------------------------------------|------------------------------------------------------------------------------------------|
-| **API_ID / API_HASH**                 | Platform data from which to launch a Telegram session _(stock - Android)_                |
-| **AUTO_UPGRADE**                      | Whether to upgrade the passive earn _(True / False)_                                     |
-| **AUTO_CLICKER**                      | Enable automatic clicker _(True / False)_                                                |
-| **WAIT_FOR_MOST_PROFIT_UPGRADES**     | Save money for the most profitable upgrade                                               |
-| **APPLY_DAILY_ENERGY**                | Whether to use the daily free energy boost _(True / False)_                              |
-| **MIN_BALANCE**                       | Minimal balance that always will be availble                                             |
-| **SLEEP_INTERVAL_BEFORE_UPGRADE**     | Sleep before every upgrade. _default: [10, 40]_                                          |
-| **USE_PROXY_FROM_FILE**               | Whether to use proxy from the `bot/config/proxies.txt` file (True / False)               |
+| Setting name                          | Description                                                                                                   |
+|---------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| **API_ID / API_HASH**                 | Platform data from which to launch a Telegram session _(stock - Android)_                                     |
+| **AUTO_UPGRADE**                      | Whether to upgrade the passive earn _(True / False)_                                                          |
+| **AUTO_CLICKER**                      | Enable automatic clicker _(True / False)_                                                                     |
+| **WAIT_FOR_MOST_PROFIT_UPGRADES**     | Save money for the most profitable upgrade                                                                    |
+| **APPLY_DAILY_ENERGY**                | Whether to use the daily free energy boost _(True / False)_                                                   |
+| **MIN_BALANCE**                       | Minimal balance that always will be availble                                                                  |
+| **MIN_TAPS_FOR_CLICKER_IN_PERCENT**   | Minimum percentage of taps (of the available number) at which the clicker will be launched. _Default 60%_     |
+| **SLEEP_INTERVAL_BEFORE_UPGRADE**     | Sleep before every upgrade. _default: [10, 40]_                                                               |
+| **USE_PROXY_FROM_FILE**               | Whether to use proxy from the `bot/config/proxies.txt` file (True / False)                                    |
 
 ## Quick Start 📚
 1. To install libraries on Windows click on `INSTALL.bat`.
