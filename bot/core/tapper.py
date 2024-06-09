@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from time import time
 from random import randint
 import traceback
@@ -300,7 +300,7 @@ async def fetch_daily_combo() -> list[str]:
         combo = response_json.get('combo')
         start_combo_date = datetime.strptime(response_json.get('date'), "%Y-%m-%d").astimezone(timezone(timedelta(hours=7))).replace(hour=19)
         end_combo_date = start_combo_date + timedelta(days=1)
-        curerent_date = datetime.now()
+        curerent_date = datetime.now(UTC).astimezone(timezone(timedelta(hours=7)))
         
         if start_combo_date.timestamp() < curerent_date.timestamp() and curerent_date.timestamp() < end_combo_date.timestamp():
             return combo
