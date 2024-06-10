@@ -1,6 +1,7 @@
 
 from bot.utils import logger
 import os
+import glob
 
 import asyncio
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
@@ -35,6 +36,40 @@ async def add_client(client: Client) -> None:
 
     logger.success(f'Client `{client.name}` added successfully')
 
+async def migrate_old_clients() -> None:
+    if os.path.isdir('sessions') is False:
+        logger.error('No sessions folder found')
+        return
+
+    session_names = glob.glob('sessions/*.session')
+    session_names = [os.path.splitext(os.path.basename(file))[0] for file in session_names]
+
+    if len(session_names) == 0:
+        logger.error('Sessions folder is empty')
+        return
+    
+    clients_migrated = 0
+    
+    for session_name in session_names:
+        try:
+            tg_client = TgClient(
+                name=session_name,
+                api_id=settings.API_ID,
+                api_hash=settings.API_HASH,
+                workdir='sessions/'
+            )
+
+            access_token = await auth(tg_client=tg_client)
+
+            await add_client(client=Client(name=session_name, token=access_token))
+            clients_migrated += 1
+        except Exception as error:
+            logger.error(f"Unknown error while getting Access Token: {error}")
+    
+    if clients_migrated == 0:
+        logger.info('No clients migrated')
+    else:
+        logger.success(f'{clients_migrated} clients migrated successfully')
 
 async def register_client_by_tg_auth() -> None:
     if not settings.API_ID or not settings.API_HASH:
@@ -47,28 +82,31 @@ async def register_client_by_tg_auth() -> None:
         return None
 
     try:
-        tg_web_data = await get_tg_web_data(client_name)
+        tg_client = TgClient(
+            name=client_name,
+            api_id=settings.API_ID,
+            api_hash=settings.API_HASH
+        )
+        async with tg_client:
+            await tg_client.get_me()
 
-        response = requests.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
-                                            json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
-
-        response_json = response.json()
-        access_token = response_json['authToken']
+        access_token = await auth(tg_client=tg_client)
+        tg_client.disconnect()
 
         await add_client(client=Client(name=client_name, token=access_token))
     except Exception as error:
         logger.error(f"Unknown error while getting Access Token: {error}")
 
+async def auth(tg_client: TgClient) -> str | None:
+    tg_web_data = await get_tg_web_data(tg_client)
 
-async def get_tg_web_data(client_name) -> str | None:
-    tg_client = TgClient(
-        name=client_name,
-        api_id=settings.API_ID,
-        api_hash=settings.API_HASH
-    )
-    async with tg_client:
-        user_data = await tg_client.get_me()
-    
+    response = requests.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
+                             json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
+
+    return response.json().get('authToken')
+
+
+async def get_tg_web_data(tg_client: TgClient) -> str | None:
     try:
         if not tg_client.is_connected:
             try:

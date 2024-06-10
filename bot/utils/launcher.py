@@ -10,7 +10,7 @@ from better_proxy import Proxy
 from bot.config import settings
 from bot.utils import logger
 from bot.core.tapper import run_tapper
-from bot.core.registrator import register_client, register_client_by_tg_auth
+from bot.core.registrator import register_client, register_client_by_tg_auth, migrate_old_clients
 
 
 start_text = """
@@ -24,6 +24,7 @@ Select an action:
     1. Create client by token
     2. Run clicker
     3. Create client by tg auth
+    4. Migrate old sessions to clients
 """
 
 
@@ -74,8 +75,8 @@ async def process() -> None:
 
             if not action.isdigit():
                 logger.warning("Action must be number")
-            elif action not in ['1', '2', '3']:
-                logger.warning("Action must be 1, 2 or 3")
+            elif action not in ['1', '2', '3', '4']:
+                logger.warning("Action must be 1-4")
             else:
                 action = int(action)
                 break
@@ -88,6 +89,8 @@ async def process() -> None:
         await run_tasks(clients=clients)
     elif action == 3:
         await register_client_by_tg_auth()
+    elif action == 4:
+        await migrate_old_clients()
 
 
 async def run_tasks(clients: list[Client]):
