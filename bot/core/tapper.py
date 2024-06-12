@@ -157,7 +157,7 @@ class Tapper:
 
     async def apply_energy_boost(self) -> bool:
         energy_boost = next((boost for boost in self.boosts if boost.id == 'BoostFullAvailableTaps'), {})
-        if energy_boost.cooldown_seconds != 0 or energy_boost.level >= energy_boost.max_level:
+        if energy_boost.cooldown_seconds != 0 or energy_boost.level > energy_boost.max_level:
             return False
 
         profile = await self.web_client.apply_boost(boost_id="BoostFullAvailableTaps")
