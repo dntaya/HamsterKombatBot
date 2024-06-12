@@ -1,6 +1,6 @@
 import random
 
-from bot.utils.scripts import generate_random_visitor_id
+from .scripts import generate_random_visitor_id
 
 
 visitor_id = generate_random_visitor_id()

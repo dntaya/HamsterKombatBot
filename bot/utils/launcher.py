@@ -1,17 +1,17 @@
-import os
-import glob
-import asyncio
 import argparse
+import asyncio
+import glob
+import os
 from itertools import cycle
 
-from bot.utils.client import Client
 from better_proxy import Proxy
 
 from bot.config import settings
-from bot.utils import logger
-from bot.core.tapper import run_tapper
 from bot.core.registrator import register_client, register_client_by_tg_auth, migrate_old_clients
-
+from bot.core.tapper import run_tapper
+from bot.core.wallet_attach import attach_wallet
+from bot.utils.client import Client
+from bot.utils.logger import logger
 
 start_text = """
 
@@ -25,6 +25,7 @@ Select an action:
     2. Run clicker
     3. Create client by tg auth
     4. Migrate old sessions to clients
+    5. Attach wallet to clients
 """
 
 
@@ -45,7 +46,7 @@ def get_proxies() -> list[Proxy]:
     return proxies
 
 
-async def get_clients() -> list[str]:
+async def get_clients() -> list[Client]:
     client_names = get_client_names()
 
     if not client_names:
@@ -55,7 +56,7 @@ async def get_clients() -> list[str]:
     for client_name in client_names:
         with open(f'clients/{client_name}.client', 'r') as file:
             clients.append(Client(client_name, file.read()))
-    
+
     return clients
 
 
@@ -75,8 +76,8 @@ async def process() -> None:
 
             if not action.isdigit():
                 logger.warning("Action must be number")
-            elif action not in ['1', '2', '3', '4']:
-                logger.warning("Action must be 1-4")
+            elif action not in ['1', '2', '3', '4', '5']:
+                logger.warning("Action must be 1-5")
             else:
                 action = int(action)
                 break
@@ -91,6 +92,10 @@ async def process() -> None:
         await register_client_by_tg_auth()
     elif action == 4:
         await migrate_old_clients()
+    elif action == 5:
+        clients = await get_clients()
+
+        await attach_wallet(clients)
 
 
 async def run_tasks(clients: list[Client]):

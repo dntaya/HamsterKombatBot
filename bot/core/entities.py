@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from time import time
+from enum import Enum, StrEnum
+
 from bot.config.config import settings
-from enum import Enum
 
 
+# pylint: disable=R0902
 @dataclass
 class Profile:
     balance: float
@@ -13,7 +14,6 @@ class Profile:
     energy_recover_per_sec: int
     earn_per_tap: float
     max_energy: int
-    update_time: int
     last_passive_earn: float
     exchange_id: str | None
     last_energy_boost_time: int
@@ -28,18 +28,20 @@ class Profile:
         self.max_energy = data.get('maxTaps', 0)
         self.last_passive_earn = data.get('lastPassiveEarn', 0)
         self.exchange_id = data.get('exchangeId')
-        self.update_time = time()
-        try: 
-            self.last_energy_boost_time = next((boost for boost in data["boosts"] if boost['id'] == 'BoostFullAvailableTaps'), {}).get("lastUpgradeAt", 0)
+        try:
+            self.last_energy_boost_time = next(
+                (boost for boost in data["boosts"] if boost['id'] == 'BoostFullAvailableTaps'), {}).get("lastUpgradeAt",
+                                                                                                        0)
         except:
             self.last_energy_boost_time = 0
 
-    def getAvailableTaps(self):
+    def get_available_taps(self):
         return int(float(self.available_energy) / self.earn_per_tap)
-    
-    def getSpendingBalance(self):
+
+    def get_spending_balance(self):
         return self.balance - settings.MIN_BALANCE
-    
+
+
 @dataclass
 class Upgrade:
     id: str
@@ -74,13 +76,14 @@ class Upgrade:
             return self.price / self.earn_per_hour
         return self.price / self.earn_per_hour \
             + self.cooldown_seconds / 3600 \
-            + max((self.price - profile.getSpendingBalance()) / profile.earn_per_hour, 0) 
-    
+            + max((self.price - profile.get_spending_balance()) / profile.earn_per_hour, 0)
+
     def can_upgrade(self) -> bool:
         return self.is_available \
             and not self.is_expired \
             and (self.earn_per_hour != 0 or self.welcome_coins != 0) \
-            and self.max_level >= self.level \
+            and self.max_level >= self.level
+
 
 @dataclass
 class Boost:
@@ -95,6 +98,7 @@ class Boost:
         self.level = data.get("level", 0)
         self.max_level = data.get("maxLevel", self.level)
 
+
 @dataclass
 class Task:
     id: str
@@ -107,6 +111,7 @@ class Task:
         self.is_completed = data["isCompleted"]
         self.reward_coins = data.get("rewardCoins", 0)
         self.days = data.get("days", 0)
+
 
 @dataclass
 class DailyCombo:
@@ -121,6 +126,7 @@ class DailyCombo:
         self.remain_seconds = data["remainSeconds"]
         self.upgrade_ids = data["upgradeIds"]
 
+
 @dataclass
 class DailyCipher:
     cipher: str
@@ -132,6 +138,7 @@ class DailyCipher:
         self.bonus_coins = data["bonusCoins"]
         self.is_claimed = data["isClaimed"]
 
+
 @dataclass
 class Config:
     daily_cipher: DailyCipher
@@ -139,13 +146,29 @@ class Config:
     def __init__(self, data: dict):
         self.daily_cipher = DailyCipher(data=data["dailyCipher"])
 
+
 class SleepReason(Enum):
     WAIT_UPGRADE_COOLDOWN = 1
     WAIT_UPGRADE_MONEY = 2
     WAIT_ENERGY_RECOVER = 3
 
+
 @dataclass
 class Sleep:
-    delay: int
+    delay: float
     sleep_reason: SleepReason
-    created_time: int
+    created_time: float
+
+
+@dataclass
+class AirDropTask:
+    id: str
+    is_completed: bool
+
+    def __init__(self, data: dict):
+        self.id = data["id"]
+        self.is_completed = data["isCompleted"]
+
+
+class AirDropTaskId(StrEnum):
+    CONNECT_TON_WALLET = "airdrop_connect_ton_wallet"

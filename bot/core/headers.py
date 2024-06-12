@@ -1,3 +1,6 @@
+# pylint: disable=C0301
+import json as json_parser
+
 headers = {
     'Accept-Language': 'en-GB,en;q=0.9',
     'Accept-Encoding': 'gzip, deflate, br',
@@ -16,9 +19,12 @@ additional_headers_for_empty_requests = {
     'Content-Length': "0",
 }
 
-def createAdditionalHeadersForDataRequests(content_length: int) -> dict:
+
+def create_headers(json: dict | None) -> dict:
+    if json is None:
+        return additional_headers_for_empty_requests
     return {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Content-Length': str(content_length),
+        'Content-Length': str(len(json_parser.dumps(json).encode('utf-8'))),
     }

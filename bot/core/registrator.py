@@ -1,18 +1,19 @@
-
-from bot.utils import logger
-import os
-import glob
-
 import asyncio
+import glob
+import os
+from urllib.parse import unquote
+
+import requests
+from pyrogram import Client as TgClient
 from pyrogram.errors import Unauthorized, UserDeactivated, AuthKeyUnregistered, FloodWait
 from pyrogram.raw.functions.messages import RequestWebView
-from ..exceptions import InvalidSession
-from pyrogram import Client as TgClient
-from urllib.parse import unquote
-from bot.utils.fingerprint import FINGERPRINT
+
 from bot.config import settings
+from bot.utils import logger
 from bot.utils.client import Client
-import requests
+from bot.utils.fingerprint import FINGERPRINT
+from bot.exceptions import InvalidSession
+
 
 async def register_client() -> None:
     client_name = input('\nEnter the client name (press Enter to exit): ')
@@ -26,6 +27,7 @@ async def register_client() -> None:
         return None
     await add_client(client=Client(name=client_name, token=token))
 
+
 async def add_client(client: Client) -> None:
     if os.path.isdir('clients') is False:
         os.mkdir('clients')
@@ -35,6 +37,7 @@ async def add_client(client: Client) -> None:
     f.close()
 
     logger.success(f'Client `{client.name}` added successfully')
+
 
 async def migrate_old_clients() -> None:
     if os.path.isdir('sessions') is False:
@@ -47,9 +50,9 @@ async def migrate_old_clients() -> None:
     if len(session_names) == 0:
         logger.error('Sessions folder is empty')
         return
-    
+
     clients_migrated = 0
-    
+
     for session_name in session_names:
         try:
             tg_client = TgClient(
@@ -65,11 +68,12 @@ async def migrate_old_clients() -> None:
             clients_migrated += 1
         except Exception as error:
             logger.error(f"Unknown error while getting Access Token: {error}")
-    
+
     if clients_migrated == 0:
         logger.info('No clients migrated')
     else:
         logger.success(f'{clients_migrated} clients migrated successfully')
+
 
 async def register_client_by_tg_auth() -> None:
     if not settings.API_ID or not settings.API_HASH:
@@ -91,11 +95,12 @@ async def register_client_by_tg_auth() -> None:
             await tg_client.get_me()
 
         access_token = await auth(tg_client=tg_client)
-        tg_client.disconnect()
+        await tg_client.disconnect()
 
         await add_client(client=Client(name=client_name, token=access_token))
     except Exception as error:
         logger.error(f"Unknown error while getting Access Token: {error}")
+
 
 async def auth(tg_client: TgClient) -> str | None:
     tg_web_data = await get_tg_web_data(tg_client)
