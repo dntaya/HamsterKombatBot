@@ -39,7 +39,7 @@
 
 2. Перейдите во вкладку **earn**, чтобы сгенерировать HTTP запрос.![earn-tab](https://github.com/Sanlovty/HamsterKombatBot_prs/assets/68380831/268dad87-6919-44fe-9eab-de1d98a40d9d)
 
-3. В строке поиска введите `list-task` и выберете фильтр `Fetch/XHR`.![filters](https://github.com/Sanlovty/HamsterKombatBot_prs/assets/68380831/d03fc2e2-70aa-47ba-97c8-6b5c8a2d8391)
+3. В строке поиска введите `list-task` и выберите фильтр `Fetch/XHR`.![filters](https://github.com/Sanlovty/HamsterKombatBot_prs/assets/68380831/d03fc2e2-70aa-47ba-97c8-6b5c8a2d8391)
 
 4. Нажмите на запрос, чтобы открыть меню взаимодействия с HTTP запросом.![open-request](https://github.com/Sanlovty/HamsterKombatBot_prs/assets/68380831/b69a8cf6-8f3a-4afa-84fd-d3a644bf80e5)
 

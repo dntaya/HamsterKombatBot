@@ -30,7 +30,9 @@
 
 ## Предварительные условия
 Прежде чем начать, убедитесь, что у вас установлено следующее:
-- [Python](https://www.python.org/downloads/) версии 3.10 или 3.11.
+- [Python](https://www.python.org/downloads/) версии 3.11.
+
+## [Получение токена на Android устройстве](docs/android-auth-info-extraction-guide.md)
 
 ## Получение API ключей
 1. Перейдите на сайт [my.telegram.org](https://my.telegram.org) и войдите в систему, используя свой номер телефона.
