@@ -88,7 +88,7 @@ async def add_ref() -> None:
 
     profile = Profile.load(name = profile_name)
 
-     await add_referral(profile, referrer)
+    await add_referral(profile, referrer)
 
 
 async def process() -> None:

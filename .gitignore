@@ -65,8 +65,8 @@ db.sqlite3
 db.sqlite3-journal
 
 # DB
-#sessions/
-#clients/
+profiles/*.json
+sessions/*.session
 
 # Flask stuff:
 instance/

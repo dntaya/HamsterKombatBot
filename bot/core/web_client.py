@@ -112,16 +112,16 @@ class WebClient:
         return list(map(lambda d: AirDropTask(data=d), response['airdropTasks']))
 
     async def make_request(self, request: Requests, json: dict | None = None) -> dict:
-        #print(request)        
-        #print(json)
+        # print(request)        
+        # print(json)
 
 
         response = await self.http_client.post(url=request, json=json)        
         response_text = await response.text()
 
-        #print(response_text)
-        #print(response.headers)
-        #print(response.url)
+        # print(response_text)
+        # print(response.headers)
+        # print(response.url)
 
         if response.status != 422:
             response.raise_for_status()
