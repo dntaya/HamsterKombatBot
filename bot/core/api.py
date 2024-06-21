@@ -1,0 +1,22 @@
+from enum import StrEnum
+
+class Requests(StrEnum):
+    CONFIG = "https://api.hamsterkombat.io/clicker/config"
+    ME_TELEGRAM = "https://api.hamsterkombat.io/auth/me-telegram"
+    TAP = "https://api.hamsterkombat.io/clicker/tap"
+    BOOSTS_FOR_BUY = "https://api.hamsterkombat.io/clicker/boosts-for-buy"
+    BUY_UPGRADE = "https://api.hamsterkombat.io/clicker/buy-upgrade"
+    UPGRADES_FOR_BUY = "https://api.hamsterkombat.io/clicker/upgrades-for-buy"
+    BUY_BOOST = "https://api.hamsterkombat.io/clicker/buy-boost"
+    CHECK_TASK = "https://api.hamsterkombat.io/clicker/check-task"
+    SELECT_EXCHANGE = "https://api.hamsterkombat.io/clicker/select-exchange"
+    LIST_TASKS = "https://api.hamsterkombat.io/clicker/list-tasks"
+    SYNC = "https://api.hamsterkombat.io/clicker/sync"
+    CLAIM_DAILY_CIPHER = "https://api.hamsterkombat.io/clicker/claim-daily-cipher"
+    CLAIM_DAILY_COMBO = "https://api.hamsterkombat.io/clicker/claim-daily-combo"
+    REFERRAL_STAT = "https://api.hamsterkombat.io/clicker/referral-stat"
+    LIST_AIRDROP_TASKS = "https://api.hamsterkombat.io/clicker/list-airdrop-tasks"
+    CHECK_AIRDROP_TASK = "https://api.hamsterkombat.io/clicker/check-airdrop-task"
+    WEBAPP_AUTH = "https://api.hamsterkombat.io/auth/auth-by-telegram-webapp"
+    ADD_REFERAL = "https://api.hamsterkombat.io/clicker/add-referral"
+    DELETE_WALLET = "https://api.hamsterkombat.io/clicker/delete-wallet"
