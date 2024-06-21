@@ -1,6 +1,4 @@
 import asyncio
-import glob
-import os
 from urllib.parse import unquote
 
 import requests
@@ -10,103 +8,65 @@ from pyrogram.raw.functions.messages import RequestWebView
 
 from bot.config import settings
 from bot.utils import logger
-from bot.utils.client import Client
-from bot.utils.fingerprint import FINGERPRINT
+from bot.utils.profile import Profile
+from bot.utils.fingerprint import getFingerprint
 from bot.exceptions import InvalidSession
+from bot.core.headers import Headers
+from bot.core.api import Requests
 
 
 async def register_client() -> None:
-    client_name = input('\nEnter the client name (press Enter to exit): ')
+    profile_name = input('\nEnter the profile name (press Enter to exit): ')
 
-    if not client_name:
+    if not profile_name:
         return None
 
-    token = input('\nEnter the token (press Enter to exit): ')
+    token = input('\nEnter the token (Leave empty to start TG Auth): ')
 
-    if not token:
-        return None
-    await add_client(client=Client(name=client_name, token=token))
+    fingerprint = await getFingerprint()
 
-
-async def add_client(client: Client) -> None:
-    if os.path.isdir('clients') is False:
-        os.mkdir('clients')
-
-    f = open(f"clients/{client.name}.client", "a")
-    f.write(client.token)
-    f.close()
-
-    logger.success(f'Client `{client.name}` added successfully')
-
-
-async def migrate_old_clients() -> None:
-    if os.path.isdir('sessions') is False:
-        logger.error('No sessions folder found')
-        return
-
-    session_names = glob.glob('sessions/*.session')
-    session_names = [os.path.splitext(os.path.basename(file))[0] for file in session_names]
-
-    if len(session_names) == 0:
-        logger.error('Sessions folder is empty')
-        return
-
-    clients_migrated = 0
-
-    for session_name in session_names:
+    if not token:       
         try:
-            tg_client = TgClient(
-                name=session_name,
-                api_id=settings.API_ID,
-                api_hash=settings.API_HASH,
-                workdir='sessions/'
-            )
-
-            access_token = await auth(tg_client=tg_client)
-
-            await add_client(client=Client(name=session_name, token=access_token))
-            clients_migrated += 1
+            token = await register_client_by_tg_auth(profile_name, fingerprint.fingerprint, fingerprint.useragent)
         except Exception as error:
-            logger.error(f"Unknown error while getting Access Token: {error}")
+            logger.error(f"Failed to register client by TG Auth: {error}")
+            raise
+    
+    Profile(name=profile_name, token=token, user_agent = fingerprint.useragent)
 
-    if clients_migrated == 0:
-        logger.info('No clients migrated')
-    else:
-        logger.success(f'{clients_migrated} clients migrated successfully')
+    logger.success(f'Profile `{profile_name}` added successfully')
 
-
-async def register_client_by_tg_auth() -> None:
+async def register_client_by_tg_auth(profile_name, fingerprint, useragent) -> None:
     if not settings.API_ID or not settings.API_HASH:
         logger.error('API_ID or API_HASH is not set in the .env file')
         return None
 
-    client_name = input('\nEnter the client name (press Enter to exit): ')
-
-    if not client_name:
-        return None
-
     try:
         tg_client = TgClient(
-            name=client_name,
+            name=profile_name,
             api_id=settings.API_ID,
-            api_hash=settings.API_HASH
+            api_hash=settings.API_HASH,
+            workdir=settings.ROOT_PATH.joinpath('sessions')
         )
         async with tg_client:
-            await tg_client.get_me()
+            me = await tg_client.get_me()
+        access_token = await auth(tg_client=tg_client, fingerprint=fingerprint, useragent=useragent)
 
-        access_token = await auth(tg_client=tg_client)
-        await tg_client.disconnect()
+        return access_token
 
-        await add_client(client=Client(name=client_name, token=access_token))
     except Exception as error:
         logger.error(f"Unknown error while getting Access Token: {error}")
+        raise
 
 
-async def auth(tg_client: TgClient) -> str | None:
+async def auth(tg_client: TgClient, fingerprint: str, useragent: str) -> str | None:
+    
+    headers = Headers({'authorization': 'authToken is empty, store token null', 'User-Agent': useragent, 'Content-Type': 'application/json'})
+
     tg_web_data = await get_tg_web_data(tg_client)
 
-    response = requests.post(url='https://api.hamsterkombat.io/auth/auth-by-telegram-webapp',
-                             json={"initDataRaw": tg_web_data, "fingerprint": FINGERPRINT})
+    response = requests.post(url=Requests.WEBAPP_AUTH, headers=headers,
+                              data=f'{{"initDataRaw":"{requests.utils.quote(tg_web_data, safe='=&')}","fingerprint":{fingerprint}}}') 
 
     return response.json().get('authToken')
 

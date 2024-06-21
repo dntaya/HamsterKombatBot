@@ -1,9 +1,24 @@
+import hashlib
 import random
+import string
 
-from .scripts import generate_random_visitor_id
+import aiohttp
+import asyncio
 
+from dataclasses import dataclass
+from bot.config import settings
+from bot.utils import logger
 
-visitor_id = generate_random_visitor_id()
+@dataclass
+class Fingerprint:
+    fingerprint: str
+    useragent: str
+
+def generate_random_visitor_id():
+    random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+    visitor_id = hashlib.md5(random_string.encode()).hexdigest()
+
+    return visitor_id
 
 timezones = {
     'America/New_York': 'en-US',
@@ -23,10 +38,32 @@ timezones = {
     'Pacific/Auckland': 'en-NZ'
 }
 
+chrome = [
+    '125.0.6422.72',
+    '125.0.6422.113',
+    '125.0.6422.152',
+    '125.0.6422.146',
+    '125.0.6422.82',
+    '125.0.6422.165',
+    '125.0.6422.52',
+    '125.0.6422.34',
+    '125.0.6422.147',
+    '125.0.6422.64',
+    '125.0.6422.68',
+    '125.0.6422.148',
+    '125.0.6422.53',
+    '126.0.6478.26',
+    '126.0.6478.8',
+    '126.0.6478.17',
+    '126.0.6478.40',
+    '126.0.6478.50'	
+]
+
 timezone = random.choice(list(timezones.keys()))
 language = timezones[timezone]
 
-FINGERPRINT = {
+def fp():
+    return {
     'fingerprint': {
         'version': '4.2.1',
         'visitorId': generate_random_visitor_id(),
@@ -93,7 +130,7 @@ FINGERPRINT = {
                 'duration': 0,
             },
             'deviceMemory': {
-                'value': 8,
+                'value': random.choice([2,3,4,6,8]),
                 'duration': 0,
             },
             'screenResolution': {
@@ -104,7 +141,7 @@ FINGERPRINT = {
                 'duration': 0,
             },
             'hardwareConcurrency': {
-                'value': 8,
+                'value': random.choice([4,6,8]),
                 'duration': 0,
             },
             'timezone': {
@@ -140,7 +177,7 @@ FINGERPRINT = {
             },
             'touchSupport': {
                 'value': {
-                    'maxTouchPoints': 1,
+                    'maxTouchPoints': 5,
                     'touchEvent': True,
                     'touchStart': True,
                 },
@@ -702,3 +739,35 @@ FINGERPRINT = {
         },
     }
 }
+
+def ua():
+    az = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    a = random.randint(8, 12)
+    b = 'P{}{}1.{}.{}'.format(random.choice(az),random.choice(az),random.randint(10000, 90000),random.randint(50, 200))
+    
+    return 'Mozilla/5.0 (Linux; Android {}; SM-A146P Build/{}; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/{} Mobile Safari/537.36'.format(a, b, random.choice(chrome))
+
+
+async def getFingerprint():
+
+    async def get(session: aiohttp.ClientSession, url):
+        resp = await session.request('GET', url=url)
+        data = await resp.text()
+        
+        return data
+        
+
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+
+        tasks.append(get(session=session, url = 'http://dnta.duckdns.org/fingerprint'))
+        tasks.append(get(session=session, url = 'http://dnta.duckdns.org/useragent'))
+
+        try:
+            data = await asyncio.gather(*tasks)
+            return Fingerprint(fingerprint = data[0], useragent = data[1])
+        except Exception as error:
+            logger.error(f"Fail to get fingerprint: {error}")
+            traceback.print_exc()
+
+        return Fingerprint(fingerprint = fp(), useragent = ua())

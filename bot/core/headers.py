@@ -1,18 +1,27 @@
 # pylint: disable=C0301
 import json as json_parser
 
-headers = {
-    'Accept-Language': 'en-GB,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive',
-    'Host': 'api.hamsterkombat.io',
-    'Origin': 'https://hamsterkombat.io',
-    'Referer': 'https://hamsterkombat.io/',
-    'Sec-Fetch-Dest': 'empty',
-    'Sec-Fetch-Mode': 'cors',
-    'Sec-Fetch-Site': 'same-site',
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
-}
+def Headers(additional = {}) -> dict:
+    default =    {
+        'Accept-Language': 'ru,ru-RU;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Host': 'api.hamsterkombat.io',
+        'Origin': 'https://hamsterkombat.io',
+        'Referer': 'https://hamsterkombat.io/',
+        'X-Requested-With': 'org.telegram.messenger',
+        'sec-ch-ua-platform': '"Android"',
+        'sec-ch-ua-mobile': '?1',
+        'sec-ch-ua': '"Android WebView";v="125", "Chromium";v="125", "Not?A_Brand";v="33"',	
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
+        'accept': 'application/json',
+    }
+
+    default.update(additional)
+    
+    return default
 
 additional_headers_for_empty_requests = {
     'Accept': '*/*',

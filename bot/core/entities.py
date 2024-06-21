@@ -1,12 +1,11 @@
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-
-from bot.config.config import settings
-
+from bot.utils.profile import Profile
 
 # pylint: disable=R0902
 @dataclass
-class Profile:
+class User:
+    id: int
     balance: float
     earn_per_hour: float
     earn_per_sec: float
@@ -17,8 +16,10 @@ class Profile:
     last_passive_earn: float
     exchange_id: str | None
     last_energy_boost_time: int
+    referrals_count: int
 
     def __init__(self, data: dict):
+        self.id = data.get('id')
         self.balance = data.get('balanceCoins', 0)
         self.earn_per_hour = data.get('earnPassivePerHour', 0)
         self.earn_per_sec = data.get('earnPassivePerSec', 0)
@@ -28,18 +29,17 @@ class Profile:
         self.max_energy = data.get('maxTaps', 0)
         self.last_passive_earn = data.get('lastPassiveEarn', 0)
         self.exchange_id = data.get('exchangeId')
+        self.referrals_count = data.get('referralsCount', 0)
         try:
             self.last_energy_boost_time = next(
-                (boost for boost in data["boosts"] if boost['id'] == 'BoostFullAvailableTaps'), {}).get("lastUpgradeAt",
-                                                                                                        0)
+                (boost for boost in data["boosts"] if boost['id'] == 'BoostFullAvailableTaps'), {}).get("lastUpgradeAt", 0)
         except:
             self.last_energy_boost_time = 0
 
     def get_available_taps(self):
         return int(float(self.available_energy) / self.earn_per_tap)
+    
 
-    def get_spending_balance(self):
-        return self.balance - settings.MIN_BALANCE
 
 
 @dataclass
@@ -68,15 +68,6 @@ class Upgrade:
         self.max_level = data.get("maxLevel", data["level"])
         self.welcome_coins = data.get("welcomeCoins", 0)
         self.condition = data.get("condition")
-
-    def calculate_significance(self, profile: Profile) -> float:
-        if self.price == 0:
-            return 0
-        if profile.earn_per_hour == 0:
-            return self.price / self.earn_per_hour
-        return self.price / self.earn_per_hour \
-            + self.cooldown_seconds / 3600 \
-            + max((self.price - profile.get_spending_balance()) / profile.earn_per_hour, 0)
 
     def can_upgrade(self) -> bool:
         return self.is_available \

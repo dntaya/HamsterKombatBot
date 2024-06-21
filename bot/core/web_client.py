@@ -1,54 +1,28 @@
 import json as json_parser
-from enum import StrEnum
 from time import time
 
 import aiohttp
-from better_proxy import Proxy
 
-from bot.core.entities import AirDropTask, Boost, Upgrade, Profile, Task, DailyCombo, Config, AirDropTaskId
-from bot.core.headers import create_headers
-from bot.utils import logger
-from bot.utils.client import Client
-
-
-class Requests(StrEnum):
-    CONFIG = "https://api.hamsterkombat.io/clicker/config"
-    ME_TELEGRAM = "https://api.hamsterkombat.io/auth/me-telegram"
-    TAP = "https://api.hamsterkombat.io/clicker/tap"
-    BOOSTS_FOR_BUY = "https://api.hamsterkombat.io/clicker/boosts-for-buy"
-    BUY_UPGRADE = "https://api.hamsterkombat.io/clicker/buy-upgrade"
-    UPGRADES_FOR_BUY = "https://api.hamsterkombat.io/clicker/upgrades-for-buy"
-    BUY_BOOST = "https://api.hamsterkombat.io/clicker/buy-boost"
-    CHECK_TASK = "https://api.hamsterkombat.io/clicker/check-task"
-    SELECT_EXCHANGE = "https://api.hamsterkombat.io/clicker/select-exchange"
-    LIST_TASKS = "https://api.hamsterkombat.io/clicker/list-tasks"
-    SYNC = "https://api.hamsterkombat.io/clicker/sync"
-    CLAIM_DAILY_CIPHER = "https://api.hamsterkombat.io/clicker/claim-daily-cipher"
-    CLAIM_DAILY_COMBO = "https://api.hamsterkombat.io/clicker/claim-daily-combo"
-    REFERRAL_STAT = "https://api.hamsterkombat.io/clicker/referral-stat"
-    LIST_AIRDROP_TASKS = "https://api.hamsterkombat.io/clicker/list-airdrop-tasks"
-    CHECK_AIRDROP_TASK = "https://api.hamsterkombat.io/clicker/check-airdrop-task"
+from bot.core.entities import AirDropTask, Boost, Upgrade, User, Task, DailyCombo, AirDropTaskId, DailyCipher
+from bot.core.api import Requests
+from bot.utils.profile import Profile
 
 
 class WebClient:
-    def __init__(self, http_client: aiohttp.ClientSession, client: Client, proxy: str | None):
+    profile: Profile
+    http_client: aiohttp.ClientSession
+
+    def __init__(self, http_client: aiohttp.ClientSession, profile: Profile):
+
+        self.profile = profile
         self.http_client = http_client
-        self.session_name = client.name
-        self.http_client.headers["Authorization"] = f"Bearer {client.token}"
-        self.proxy = proxy
+        self.http_client.headers["User-Agent"] = profile.user_agent
+        self.http_client.headers["Authorization"] = f"Bearer {profile.token}"
 
-    async def check_proxy(self, proxy: Proxy) -> None:
-        try:
-            response = await self.http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
-            ip = (await response.json()).get('origin')
-            logger.info(f"{self.session_name} | Proxy IP: {ip}")
-        except aiohttp.ClientConnectorError as error:
-            logger.error(f"{self.session_name} | Proxy: {proxy} | Error: {error}")
-
-    async def get_profile_data(self) -> Profile:
+    async def get_user_data(self) -> User:
         response = await self.make_request(Requests.SYNC)
-        profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
-        return Profile(data=profile_data)
+        user_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+        return User(data=user_data)
 
     async def get_tasks(self) -> list[Task]:
         response = await self.make_request(Requests.LIST_TASKS)
@@ -62,23 +36,23 @@ class WebClient:
         response = await self.make_request(Requests.CHECK_TASK, json={'taskId': task_id})
         return response.get('task', {}).get('isCompleted', False)
 
-    async def apply_boost(self, boost_id: str) -> Profile:
-        response = await self.make_request(Requests.BUY_BOOST, json={'timestamp': time(), 'boostId': boost_id})
-        profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+    async def apply_boost(self, boost_id: str) -> User:
+        response = await self.make_request(Requests.BUY_BOOST, json={'timestamp':int(time()),'boostId':boost_id})
+        user_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
 
-        return Profile(data=profile_data)
+        return User(data=user_data)
 
     async def get_upgrades(self) -> tuple[list[Upgrade], DailyCombo]:
         response = await self.make_request(Requests.UPGRADES_FOR_BUY)
         return list(map(lambda x: Upgrade(data=x), response['upgradesForBuy'])), \
             DailyCombo(data=response.get('dailyCombo', {}))
 
-    async def buy_upgrade(self, upgrade_id: str) -> tuple[Profile, list[Upgrade], DailyCombo]:
-        response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp': time(), 'upgradeId': upgrade_id})
+    async def buy_upgrade(self, upgrade_id: str) -> tuple[User, list[Upgrade], DailyCombo]:
+        response = await self.make_request(Requests.BUY_UPGRADE, json={'timestamp':int(time()),'upgradeId':upgrade_id})
         if 'found' in response:
             response = response['found']
-        profile_data = response.get('clickerUser')
-        return Profile(data=profile_data), \
+        user_data = response.get('clickerUser')
+        return User(data=user_data), \
             list(map(lambda x: Upgrade(data=x), response.get('upgradesForBuy', []))), \
             DailyCombo(data=response.get('dailyCombo', {}))
 
@@ -86,53 +60,70 @@ class WebClient:
         response = await self.make_request(Requests.BOOSTS_FOR_BUY)
         return list(map(lambda x: Boost(data=x), response['boostsForBuy']))
 
-    async def send_taps(self, available_energy: int, taps: int) -> Profile:
+    async def send_taps(self, available_energy: int, taps: int) -> User:
         response = await self.make_request(Requests.TAP,
-                                           json={'availableTaps': available_energy, 'count': taps, 'timestamp': time()})
-        profile_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
+                                           json={ 'count':taps,'availableTaps':available_energy,'timestamp':int(time())})
+        user_data = response.get('clickerUser') or response.get('found', {}).get('clickerUser', {})
 
-        return Profile(data=profile_data)
+        return User(data=user_data)
 
     async def get_me_telegram(self) -> None:
         await self.make_request(Requests.ME_TELEGRAM)
 
-    async def get_config(self) -> Config:
+    async def get_cipher(self) -> DailyCipher:
         response = await self.make_request(Requests.CONFIG)
-        return Config(data=response)
+        return DailyCipher(data=response.get('dailyCipher')) if "dailyCipher" in response else None
 
-    async def claim_daily_cipher(self, cipher: str) -> Profile:
+    async def claim_daily_cipher(self, cipher: str) -> User:
         response = await self.make_request(Requests.CLAIM_DAILY_CIPHER, json={'cipher': cipher})
         if 'found' in response:
             response = response['found']
-        return Profile(data=response.get('clickerUser'))
+        return User(data=response.get('clickerUser'))
 
-    async def claim_daily_combo(self) -> Profile:
+    async def claim_daily_combo(self) -> User:
         response = await self.make_request(Requests.CLAIM_DAILY_COMBO)
         if 'found' in response:
             response = response['found']
-        return Profile(data=response.get('clickerUser'))
+        return User(data=response.get('clickerUser'))
 
     async def get_referrals_count(self) -> int:
         response = await self.make_request(Requests.REFERRAL_STAT, json={'offset': 0})
         if 'found' in response:
             response = response['found']
         return response.get('count', 0)
+        
+    async def add_referral(self, friendUserId: int) -> dict:
+        response = await self.make_request(Requests.ADD_REFERAL,
+                                           json={'friendUserId':int(friendUserId)})
+        return response.get('friendFirstName', None)
 
     async def attach_wallet(self, wallet: str) -> bool:
         response = await self.make_request(Requests.CHECK_AIRDROP_TASK,
-                                           json={'id': AirDropTaskId.CONNECT_TON_WALLET, 'walletAddress': wallet})
+                                           json={'id':AirDropTaskId.CONNECT_TON_WALLET,'walletAddress':wallet})
         return response.get('airdropTask', {}).get('isCompleted', False)
-
+    
+    async def delete_wallet(self) -> bool:
+        response = await self.make_request(Requests.DELETE_WALLET)
+        
+        return True
+    
     async def get_airdrop_tasks(self) -> list[AirDropTask]:
         response = await self.make_request(Requests.LIST_AIRDROP_TASKS)
         return list(map(lambda d: AirDropTask(data=d), response['airdropTasks']))
 
     async def make_request(self, request: Requests, json: dict | None = None) -> dict:
-        response = await self.http_client.post(url=request,
-                                               headers=create_headers(json),
-                                               json=json)
+        #print(request)        
+        #print(json)
+
+
+        response = await self.http_client.post(url=request, json=json)        
         response_text = await response.text()
+
+        #print(response_text)
+        #print(response.headers)
+        #print(response.url)
+
         if response.status != 422:
             response.raise_for_status()
-
+        
         return json_parser.loads(response_text)

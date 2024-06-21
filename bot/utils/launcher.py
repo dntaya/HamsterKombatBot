@@ -1,16 +1,15 @@
 import argparse
 import asyncio
-import glob
-import os
+
 from itertools import cycle
 
 from better_proxy import Proxy
 
 from bot.config import settings
-from bot.core.registrator import register_client, register_client_by_tg_auth, migrate_old_clients
+from bot.core.registrator import register_client
 from bot.core.tapper import run_tapper
-from bot.core.wallet_attach import attach_wallet
-from bot.utils.client import Client
+from bot.core.helpers import attach_wallet_to_client, add_referral
+from bot.utils.profile import Profile
 from bot.utils.logger import logger
 
 start_text = """
@@ -21,24 +20,24 @@ start_text = """
 
 Select an action:
 
-    1. Create client by token
+    0. Exit
+    1. Create client
     2. Run clicker
-    3. Create client by tg auth
-    4. Migrate old sessions to clients
-    5. Attach wallet to clients
+    3. Attach wallet to clients
+    4. Add referral
 """
 
 
-def get_client_names() -> list[str]:
-    client_names = glob.glob('clients/*.client')
-    client_names = [os.path.splitext(os.path.basename(file))[0] for file in client_names]
+def get_profile_files() -> list[str]:
+    profile_files = settings.PROFILE_DIR.glob('*.json')
 
-    return client_names
+    return list(profile_files)
 
 
 def get_proxies() -> list[Proxy]:
+    
     if settings.USE_PROXY_FROM_FILE:
-        with open(file='bot/config/proxies.txt', encoding='utf-8-sig') as file:
+        with settings.USE_PROXY_FROM_FILE.open() as file:
             proxies = [Proxy.from_str(proxy=row.strip()).as_url for row in file]
     else:
         proxies = []
@@ -46,25 +45,55 @@ def get_proxies() -> list[Proxy]:
     return proxies
 
 
-async def get_clients() -> list[Client]:
-    client_names = get_client_names()
+async def get_profiles() -> list[Profile]:
+    profile_files = get_profile_files()
 
-    if not client_names:
-        raise FileNotFoundError("Not found client files")
+    if not profile_files:
+        raise FileNotFoundError("Not found profile files")
 
-    clients = []
-    for client_name in client_names:
-        with open(f'clients/{client_name}.client', 'r') as file:
-            clients.append(Client(client_name, file.read()))
+    profiles = []
+    for profile_file in profile_files:
+        data = settings.PROFILE_DIR.joinpath(profile_file).read_text()
+        profile = Profile.model_validate_json(json_data = data, context = {'rewrite': False})
 
-    return clients
+        profiles.append(profile)
+
+    return profiles
+
+async def attach_wallet() -> None:
+    profile_name = input('\nEnter the profile name (press Enter to exit): ')
+
+    if not profile_name:
+        return None
+    
+    wallet = input('\nEnter the wallet address: ')
+
+    if not wallet:
+        return None
+  
+    profile = Profile.load(name = profile_name)
+    
+    await attach_wallet_to_client(profile, wallet)
+
+async def add_ref() -> None:
+    profile_name = input('\nEnter the profile name (press Enter to exit): ')
+
+    if not profile_name:
+        return None
+    
+    referrer = input('\nEnter Referrer id (press Enter to exit): ')
+
+    if not referrer or not referrer.isdigit():
+        return None
+
+    profile = Profile.load(name = profile_name)
+
+     await add_referral(profile, referrer)
 
 
 async def process() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('-a', '--action', type=int, help='Action to perform')
-
-    logger.info(f"Detected {len(get_client_names())} clients | {len(get_proxies())} proxies")
 
     action = parser.parse_args().action
 
@@ -76,7 +105,7 @@ async def process() -> None:
 
             if not action.isdigit():
                 logger.warning("Action must be number")
-            elif action not in ['1', '2', '3', '4', '5']:
+            elif action not in ['0', '1', '2', '3', '4', '5']:
                 logger.warning("Action must be 1-5")
             else:
                 action = int(action)
@@ -84,24 +113,24 @@ async def process() -> None:
 
     if action == 1:
         await register_client()
-    elif action == 2:
-        clients = await get_clients()
+    elif action == 2:        
+        profiles = await get_profiles()
 
-        await run_tasks(clients=clients)
+        await run_tasks(profiles=profiles)
     elif action == 3:
-        await register_client_by_tg_auth()
+        await attach_wallet()
     elif action == 4:
-        await migrate_old_clients()
-    elif action == 5:
-        clients = await get_clients()
+        await add_ref()    
+    elif action == 0:
+        exit()   
 
-        await attach_wallet(clients)
+#RUN all tasks
+async def run_tasks(profiles: list[Profile]):
+    logger.info(f"Detected {len(get_profile_files())} clients | {len(get_proxies())} proxies")
 
-
-async def run_tasks(clients: list[Client]):
     proxies = get_proxies()
     proxies_cycle = cycle(proxies) if proxies else None
-    tasks = [asyncio.create_task(run_tapper(client=client, proxy=next(proxies_cycle) if proxies_cycle else None))
-             for client in clients]
+    tasks = [asyncio.create_task(run_tapper(profile=profile, proxy=profile.proxy if profile.proxy else next(proxies_cycle) if proxies_cycle else None))
+             for profile in profiles]
 
     await asyncio.gather(*tasks)
