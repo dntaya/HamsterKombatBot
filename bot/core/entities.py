@@ -163,3 +163,7 @@ class AirDropTask:
 
 class AirDropTaskId(StrEnum):
     CONNECT_TON_WALLET = "airdrop_connect_ton_wallet"
+    SUBSCRIBE_TELEGRAM_CHANNEL="subscribe_telegram_channel"
+    INVITE_FRIENDS="invite_friends"
+    REACH_PROFIT_PER_HOUR="reach_profit_per_hour"
+    REACH_LEVEL="reach_level"

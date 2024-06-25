@@ -26,11 +26,16 @@ class Combo(BaseModel, validate_assignment=True):
         try:
             async with aiohttp.ClientSession() as http_client:
                 response = await http_client.get(settings.DAILY_JSON_URL)
-
-                self.model_validate_json(await response.text())                
-
-                if self.expired < int(time()):
+                response_json = await response.json()
+                
+                if (expired := response_json.get('expired')) < int(time()):
                     return False
+
+                self.combo = response_json.get('combo')
+                self.expired = expired           
+
+                # if self.expired < int(time()):
+                #     return False
                 
         except aiohttp.ClientConnectorError as error:
             logger.error(f"Error while get new combo file: {error}")

@@ -20,6 +20,8 @@ async def register_client() -> None:
 
     if not profile_name:
         return None
+    
+    proxy = input('\nEnter the proxy address(press Enter to skip): ')
 
     token = input('\nEnter the token (Leave empty to start TG Auth): ')
 
@@ -27,7 +29,7 @@ async def register_client() -> None:
 
     if not token:       
         try:
-            token = await register_client_by_tg_auth(profile_name, fingerprint.fingerprint, fingerprint.useragent)
+            token = await register_client_by_tg_auth(profile_name, fingerprint.fingerprint, fingerprint.useragent, proxy)
         except Exception as error:
             logger.error(f"Failed to register client by TG Auth: {error}")
             raise
@@ -36,7 +38,7 @@ async def register_client() -> None:
 
     logger.success(f'Profile `{profile_name}` added successfully')
 
-async def register_client_by_tg_auth(profile_name, fingerprint, useragent) -> None:
+async def register_client_by_tg_auth(profile_name, fingerprint, useragent, proxy) -> None:
     if not settings.API_ID or not settings.API_HASH:
         logger.error('API_ID or API_HASH is not set in the .env file')
         return None
@@ -50,7 +52,7 @@ async def register_client_by_tg_auth(profile_name, fingerprint, useragent) -> No
         )
         async with tg_client:
             me = await tg_client.get_me()
-        access_token = await auth(tg_client=tg_client, fingerprint=fingerprint, useragent=useragent)
+        access_token = await auth(tg_client=tg_client, fingerprint=fingerprint, useragent=useragent, proxy=proxy )
 
         return access_token
 
@@ -59,14 +61,15 @@ async def register_client_by_tg_auth(profile_name, fingerprint, useragent) -> No
         raise
 
 
-async def auth(tg_client: TgClient, fingerprint: str, useragent: str) -> str | None:
+async def auth(tg_client: TgClient, fingerprint: str, useragent: str, proxy: str) -> str | None:
     
     headers = Headers({'authorization': 'authToken is empty, store token null', 'User-Agent': useragent, 'Content-Type': 'application/json'})
 
     tg_web_data = await get_tg_web_data(tg_client)
 
     response = requests.post(url=Requests.WEBAPP_AUTH, headers=headers,
-                              data=f'{{"initDataRaw":"{requests.utils.quote(tg_web_data, safe='=&')}","fingerprint":{fingerprint}}}') 
+                              data=f'{{"initDataRaw":"{requests.utils.quote(tg_web_data, safe='=&')}","fingerprint":{fingerprint}}}',
+                              proxies = {'https': proxy} if proxy else None) 
 
     return response.json().get('authToken')
 

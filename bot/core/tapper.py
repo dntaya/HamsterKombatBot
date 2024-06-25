@@ -54,10 +54,10 @@ class Tapper:
         self.user = user
 
         if not self.user.exchange_id or self.user.exchange_id == "hamster":
-            await self.web_client.select_exchange(exchange_id=choice(["binance", "bybit", "okx", "bingx", "htx", "kucoin"]))
+            await self.web_client.select_exchange(exchange_id:=choice(["binance", "bybit", "okx", "bingx", "htx", "kucoin"]))
             status = await self.web_client.check_task(task_id="select_exchange")
             if status is True:
-                logger.success(f"[{self.profile.name}] Successfully selected exchange <y>Bybit</y>")
+                logger.success(f"[{self.profile.name}] Successfully selected exchange <y>{exchange_id}</y>")
 
         logger.info(f"[{self.profile.name}] Last passive earn: <g>+{self.user.last_passive_earn}</g> | "
                     f"Earn every hour: <y>{self.user.earn_per_hour}</y>")
@@ -83,7 +83,7 @@ class Tapper:
             if combo.expired < int(time()):
                 logger.info(f"[{self.profile.name}] Cached combo file expired, let's try to update remotely...")
                 if not await combo.update():
-                    logger.info(f"[{self.profile.name}] Remoute combo file expired. Combo update skiped.")
+                    logger.warning(f"[{self.profile.name}] Remoute combo file expired. Combo update skiped.")
                     return False        
 
             combo_upgrades: list[Upgrade] = list(
@@ -102,7 +102,7 @@ class Tapper:
             if upgrade.price > self.profile.min_balance:
                 logger.info(f"[{self.profile.name}] Not enough money for upgrade <e>{upgrade.name}</e>")
                 self.update_preferred_sleep(
-                    delay=int((upgrade.price - self.profile.min_balance) / self.profile.earn_per_sec),
+                    delay=int((upgrade.price - self.profile.min_balance) / self.user.earn_per_sec),
                     sleep_reason=SleepReason.WAIT_UPGRADE_MONEY
                 )
                 return True
