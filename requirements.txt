@@ -8,4 +8,3 @@ PySocks >= 1.7.1
 TgCrypto >= 1.2.5
 typing_extensions >= 4.11.0
 requests[socks] >= 2.32.3
-brotli >= 1.1.0
